@@ -1,0 +1,9 @@
+# Pega en Vercel (Production). Borra este archivo después.
+
+NEXT_PUBLIC_APP_URL=https://cita-studio.vercel.app
+
+NEXT_PUBLIC_SUPABASE_URL=https://saqdukzxljqgsyrppvkr.supabase.co
+
+SESSION_SECRET=anak-studio-session-secret-min-32-chars-long
+
+DATABASE_URL=postgresql://postgres.saqdukzxljqgsyrppvkr:Fj1V27EXXPcwNfCD@aws-0-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require

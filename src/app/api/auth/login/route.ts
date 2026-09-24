@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 import { eq } from "drizzle-orm";
 import { ZodError } from "zod";
 import { getDb, hasDatabaseUrl, safeErrorDetail, schema } from "@/lib/db";
