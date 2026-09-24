@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n/context";
 import { useToast } from "@/components/Toast";
 import { money } from "@/lib/utils";
+import { parseUsPhone } from "@/lib/phone";
 
 type CatalogService = {
   id: string;
@@ -94,6 +95,8 @@ export function BookingWizard() {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirmation | null>(null);
   const [copied, setCopied] = useState(false);
   const [dbError, setDbError] = useState(false);
@@ -139,8 +142,35 @@ export function BookingWizard() {
     year: "numeric",
   }).format(new Date(cursor.y, cursor.m, 1));
 
+  function validatePhoneField(value: string): string | null {
+    const parsed = parseUsPhone(value);
+    return parsed.ok ? null : t.phoneInvalid;
+  }
+
+  function validateEmailField(value: string): string | null {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    // Basic RFC-ish check (same spirit as zod email)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return t.emailInvalid;
+    return null;
+  }
+
   async function submit() {
     if (!selectedPro || !date || !time) return;
+    const pErr = validatePhoneField(phone);
+    const eErr = validateEmailField(email);
+    setPhoneError(pErr);
+    setEmailError(eErr);
+    if (pErr || eErr) {
+      setError(pErr || eErr);
+      return;
+    }
+    const parsedPhone = parseUsPhone(phone);
+    if (!parsedPhone.ok) {
+      setPhoneError(t.phoneInvalid);
+      setError(t.phoneInvalid);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -153,7 +183,7 @@ export function BookingWizard() {
           date,
           time,
           clientName: name,
-          clientPhone: phone,
+          clientPhone: parsedPhone.e164,
           clientEmail: email.trim() || undefined,
           notes,
         }),
@@ -453,15 +483,35 @@ export function BookingWizard() {
           </label>
           <label className="block text-sm">
             {t.phone}
-            <input
-              className="input mt-1"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              autoComplete="tel"
-              inputMode="tel"
-              required
-              minLength={7}
-            />
+            <div className="mt-1 flex overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--ivory)] focus-within:border-[var(--ink)]">
+              <span
+                className="inline-flex items-center border-r border-[var(--line)] bg-[var(--paper)] px-3 text-sm font-medium text-[var(--taupe)]"
+                title="United States"
+              >
+                +1
+              </span>
+              <input
+                className="min-h-12 w-full flex-1 border-0 bg-transparent px-3 text-base outline-none"
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  if (phoneError) setPhoneError(null);
+                }}
+                onBlur={() => setPhoneError(validatePhoneField(phone))}
+                autoComplete="tel"
+                inputMode="tel"
+                placeholder="(832) 362-1746"
+                required
+                aria-invalid={!!phoneError}
+                aria-describedby="phone-hint"
+              />
+            </div>
+            <p
+              id="phone-hint"
+              className={`mt-1 text-xs ${phoneError ? "text-red-700" : "text-[var(--muted)]"}`}
+            >
+              {phoneError || t.phoneHint}
+            </p>
           </label>
           <label className="block text-sm">
             {t.emailOptional}
@@ -469,10 +519,18 @@ export function BookingWizard() {
               className="input mt-1"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (emailError) setEmailError(null);
+              }}
+              onBlur={() => setEmailError(validateEmailField(email))}
               autoComplete="email"
               inputMode="email"
+              aria-invalid={!!emailError}
             />
+            {emailError && (
+              <p className="mt-1 text-xs text-red-700">{emailError}</p>
+            )}
           </label>
           <label className="block text-sm">
             {t.notes}
@@ -485,7 +543,13 @@ export function BookingWizard() {
           {error && <p className="text-sm text-red-700">{error}</p>}
           <button
             className="btn btn-primary w-full"
-            disabled={loading || name.trim().length < 2 || phone.trim().length < 7}
+            disabled={
+              loading ||
+              name.trim().length < 2 ||
+              !!phoneError ||
+              !!emailError ||
+              phone.trim().length < 7
+            }
             onClick={submit}
           >
             {loading ? t.submitting : t.submit}

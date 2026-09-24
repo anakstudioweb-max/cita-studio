@@ -1,4 +1,19 @@
 import { z } from "zod";
+import { parseUsPhone } from "@/lib/phone";
+
+/** Optional client email: empty → undefined; otherwise must look like an email. */
+const optionalClientEmail = z.preprocess(
+  (v) => {
+    if (typeof v !== "string") return v;
+    const t = v.trim();
+    return t === "" ? undefined : t;
+  },
+  z
+    .string()
+    .email("Enter a valid email address")
+    .max(120)
+    .optional()
+);
 
 export const bookSchema = z.object({
   professionalId: z.string().uuid(),
@@ -6,11 +21,22 @@ export const bookSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().regex(/^\d{2}:\d{2}$/),
   clientName: z.string().min(2).max(80),
-  clientPhone: z.string().min(7).max(20),
-  clientEmail: z.preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : typeof v === "string" ? v.trim() : v),
-    z.string().email().optional()
-  ),
+  clientPhone: z
+    .string()
+    .min(7)
+    .max(30)
+    .transform((raw, ctx) => {
+      const parsed = parseUsPhone(raw);
+      if (!parsed.ok) {
+        ctx.addIssue({
+          code: "custom",
+          message: parsed.error,
+        });
+        return z.NEVER;
+      }
+      return parsed.e164;
+    }),
+  clientEmail: optionalClientEmail,
   notes: z.string().max(500).optional().default(""),
 });
 

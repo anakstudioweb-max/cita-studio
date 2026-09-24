@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, eq, gt, lt, ne } from "drizzle-orm";
 import { addMinutes } from "date-fns";
+import { ZodError } from "zod";
 import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
 import { bookSchema } from "@/lib/validation";
 import { localToUtc } from "@/lib/slots";
@@ -84,6 +85,8 @@ export async function POST(req: Request) {
       refCode = genRefCode();
     }
 
+    // bookSchema already normalized phone to E.164 (+1…) and validated email
+    const clientPhone = body.clientPhone;
     const clientEmail = body.clientEmail || "";
 
     try {
@@ -94,7 +97,7 @@ export async function POST(req: Request) {
           professionalId: pro.id,
           professionalServiceId: svc.id,
           clientName: body.clientName.trim(),
-          clientPhone: body.clientPhone.trim(),
+          clientPhone,
           clientEmail,
           notes: body.notes || "",
           startAt,
@@ -162,6 +165,7 @@ export async function POST(req: Request) {
         emailStatus = "failed";
       }
 
+      // Telnyx outbound SMS is disabled — always skipped (copy-paste in emails).
       try {
         const smsResult = await sendBookingSms(notifyPayload);
         smsStatus = smsResult.status;
@@ -171,7 +175,7 @@ export async function POST(req: Request) {
           "sendBookingSms threw",
           err instanceof Error ? err.message : "unknown"
         );
-        smsStatus = "failed";
+        smsStatus = "skipped";
       }
 
       return NextResponse.json({
@@ -205,6 +209,21 @@ export async function POST(req: Request) {
       throw err;
     }
   } catch (e) {
+    if (e instanceof ZodError) {
+      const first = e.issues[0];
+      const field = first?.path?.join(".") || "";
+      const message =
+        first?.message ||
+        (field === "clientPhone"
+          ? "Enter a valid US phone number (10 digits, +1)"
+          : field === "clientEmail"
+            ? "Enter a valid email address"
+            : "Invalid booking details");
+      return NextResponse.json(
+        { error: message, field: field || undefined },
+        { status: 400 }
+      );
+    }
     console.error(e);
     return NextResponse.json({ error: "Booking failed" }, { status: 400 });
   }

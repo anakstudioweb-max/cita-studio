@@ -56,9 +56,11 @@ export const DEFAULT_TEMPLATES: TemplateMap = {
   email_client_footer:
     "Questions? Reply to this email or WhatsApp your professional.",
   sms_pro:
-    "New booking — Anak.Studio {{ref}}: {{service}} · {{when}} Houston · {{place}} · {{price}} · {{clientName}}",
+    "New booking — Anak.Studio {{ref}}: {{service}} · {{when}} Houston · {{place}} · {{price}} · {{clientName}} {{clientPhone}}",
+  // Used as the copy-paste SMS/WhatsApp body in pro/owner booking emails
+  // (automatic Telnyx SMS is disabled).
   sms_client:
-    "Booking requested — Anak.Studio {{ref}}: {{service}} · {{when}} Houston · {{place}} · {{price}} · {{clientName}}. Your pro will confirm soon.",
+    "Hi {{clientName}}, your Anak.Studio appointment is confirmed. Ref {{ref}}. {{service}} on {{when}} (Houston time). See you there!",
 };
 
 const CACHE_TTL_MS = 15_000;
