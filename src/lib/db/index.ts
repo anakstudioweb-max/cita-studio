@@ -13,7 +13,14 @@ export function getDb() {
     );
   }
   if (!_db) {
-    _client = postgres(url, { max: 10, prepare: false });
+    // Vercel serverless: single connection, no prepared statements, force TLS for Supabase
+    _client = postgres(url, {
+      max: 1,
+      prepare: false,
+      ssl: "require",
+      idle_timeout: 20,
+      connect_timeout: 10,
+    });
     _db = drizzle(_client, { schema });
   }
   return _db;

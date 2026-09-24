@@ -70,6 +70,10 @@ export async function GET() {
     return NextResponse.json({ services: catalog });
   } catch (e) {
     console.error(e);
-    return NextResponse.json({ error: "Failed to load catalog", services: [] }, { status: 500 });
+    const msg = e instanceof Error ? e.message : "unknown";
+    return NextResponse.json(
+      { error: "Failed to load catalog", detail: msg.slice(0, 160), services: [] },
+      { status: 500 }
+    );
   }
 }
