@@ -56,7 +56,7 @@ type Booking = {
   status: "requested" | "confirmed" | "done" | "cancelled";
 };
 
-type Tab = "services" | "pros" | "bookings";
+type Tab = "services" | "pros" | "bookings" | "notifications";
 
 const emptyCatalogForm = {
   id: "" as string | undefined,
@@ -112,6 +112,31 @@ export default function AdminPage() {
   const [ownerPassword, setOwnerPassword] = useState("");
   const [ownerEmailDraft, setOwnerEmailDraft] = useState("");
   const [showOwnerAccount, setShowOwnerAccount] = useState(false);
+
+  type NotifTemplates = {
+    email_pro_subject: string;
+    email_pro_headline: string;
+    email_pro_intro: string;
+    email_pro_footer: string;
+    email_owner_subject: string;
+    email_owner_headline: string;
+    email_owner_intro: string;
+    email_owner_footer: string;
+    email_client_subject: string;
+    email_client_headline: string;
+    email_client_intro: string;
+    email_client_footer: string;
+    sms_pro: string;
+    sms_client: string;
+  };
+  const [notifTemplates, setNotifTemplates] = useState<NotifTemplates | null>(
+    null
+  );
+  const [notifPlaceholders, setNotifPlaceholders] = useState<string[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifPreviewRole, setNotifPreviewRole] = useState<
+    "pro" | "owner" | "client"
+  >("pro");
 
   const [saving, setSaving] = useState(false);
 
@@ -505,6 +530,63 @@ export default function AdminPage() {
     }));
   }
 
+
+  const loadNotifications = useCallback(async () => {
+    setNotifLoading(true);
+    try {
+      const r = await fetch("/api/admin/notifications").then((x) => x.json());
+      if (r.error) {
+        flash(r.error, "error");
+        return;
+      }
+      setNotifTemplates(r.templates);
+      setNotifPlaceholders(r.placeholders || []);
+    } catch {
+      flash("Failed to load notification templates", "error");
+    } finally {
+      setNotifLoading(false);
+    }
+  }, []);
+
+  const saveNotifications = async () => {
+    if (!notifTemplates) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(notifTemplates),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        flash(data.error || "Save failed", "error");
+        return;
+      }
+      setNotifTemplates(data.templates);
+      flash("Notification templates saved");
+    } catch {
+      flash("Save failed", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const applyPreview = (tpl: string) => {
+    const sample: Record<string, string> = {
+      ref: "ANA-1A2B",
+      service: "Classic lashes",
+      when: "Tue Sep 29, 2:00 PM",
+      place: "123 Main St, Houston",
+      price: "$120",
+      clientName: "Maria Lopez",
+      clientPhone: "+1 713 555 0199",
+      clientEmail: "maria@example.com",
+      professionalName: "Ana",
+      notes: "First visit",
+    };
+    return tpl.replace(/\{\{(\w+)\}\}/g, (_, k: string) => sample[k] ?? "");
+  };
+
   const dayLabels = [t.sun, t.mon, t.tue, t.wed, t.thu, t.fri, t.sat];
 
   return (
@@ -587,6 +669,7 @@ export default function AdminPage() {
             ["services", t.catalogServices],
             ["pros", t.allPros],
             ["bookings", t.appointments],
+            ["notifications", t.notifications],
           ] as const
         ).map(([k, label]) => (
           <button
@@ -596,7 +679,12 @@ export default function AdminPage() {
                 ? "bg-[var(--ink)] text-[var(--ivory)]"
                 : "border border-[var(--line)]"
             }`}
-            onClick={() => setTab(k)}
+            onClick={() => {
+              setTab(k);
+              if (k === "notifications" && !notifTemplates) {
+                void loadNotifications();
+              }
+            }}
           >
             {label}
           </button>
@@ -1496,6 +1584,245 @@ export default function AdminPage() {
           ))}
         </div>
       )}
+
+      {/* ——— Notifications ——— */}
+      {tab === "notifications" && (
+        <div className="space-y-6">
+          <div className="card space-y-3 p-4">
+            <p className="heading-section text-lg">Email & SMS copy</p>
+            <p className="text-sm text-[var(--taupe)]">
+              Edit subject, headline, intro, and footer for each email. The
+              booking details card (ref, service, when, place, price, etc.) is
+              always filled automatically. SMS is a single text field.
+              Placeholders:
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {(notifPlaceholders.length
+                ? notifPlaceholders
+                : [
+                    "{{ref}}",
+                    "{{service}}",
+                    "{{when}}",
+                    "{{place}}",
+                    "{{price}}",
+                    "{{clientName}}",
+                    "{{clientPhone}}",
+                    "{{clientEmail}}",
+                    "{{professionalName}}",
+                    "{{notes}}",
+                  ]
+              ).map((ph) => (
+                <code
+                  key={ph}
+                  className="rounded-md border border-[var(--line)] bg-[var(--ivory)] px-2 py-0.5 text-xs"
+                >
+                  {ph}
+                </code>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost text-sm"
+              disabled={notifLoading}
+              onClick={() => void loadNotifications()}
+            >
+              {notifLoading ? t.loading : "Reload from server"}
+            </button>
+          </div>
+
+          {!notifTemplates && (
+            <p className="empty-state">
+              {notifLoading ? t.loading : "Open this tab to load templates…"}
+            </p>
+          )}
+
+          {notifTemplates && (
+            <>
+              {(
+                [
+                  ["pro", "Professional email"],
+                  ["owner", "Owner email"],
+                  ["client", "Client email"],
+                ] as const
+              ).map(([role, title]) => {
+                const sk = `email_${role}_subject` as keyof NotifTemplates;
+                const hk = `email_${role}_headline` as keyof NotifTemplates;
+                const ik = `email_${role}_intro` as keyof NotifTemplates;
+                const fk = `email_${role}_footer` as keyof NotifTemplates;
+                return (
+                  <div key={role} className="card space-y-3 p-4">
+                    <p className="heading-section text-lg">{title}</p>
+                    <label className="block text-sm">
+                      Subject
+                      <input
+                        className="input mt-1"
+                        value={notifTemplates[sk]}
+                        onChange={(e) =>
+                          setNotifTemplates({
+                            ...notifTemplates,
+                            [sk]: e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      Headline
+                      <input
+                        className="input mt-1"
+                        value={notifTemplates[hk]}
+                        onChange={(e) =>
+                          setNotifTemplates({
+                            ...notifTemplates,
+                            [hk]: e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      Intro (newlines → paragraphs)
+                      <textarea
+                        className="input mt-1 min-h-[6rem]"
+                        value={notifTemplates[ik]}
+                        onChange={(e) =>
+                          setNotifTemplates({
+                            ...notifTemplates,
+                            [ik]: e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="block text-sm">
+                      Footer note
+                      <input
+                        className="input mt-1"
+                        value={notifTemplates[fk]}
+                        onChange={(e) =>
+                          setNotifTemplates({
+                            ...notifTemplates,
+                            [fk]: e.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                );
+              })}
+
+              <div className="card space-y-3 p-4">
+                <p className="heading-section text-lg">SMS</p>
+                <label className="block text-sm">
+                  Professional SMS
+                  <textarea
+                    className="input mt-1 min-h-[4rem]"
+                    value={notifTemplates.sms_pro}
+                    onChange={(e) =>
+                      setNotifTemplates({
+                        ...notifTemplates,
+                        sms_pro: e.target.value,
+                      })
+                    }
+                  />
+                  <span className="mt-1 block text-xs text-[var(--taupe)]">
+                    {notifTemplates.sms_pro.length} chars
+                  </span>
+                </label>
+                <label className="block text-sm">
+                  Client SMS
+                  <textarea
+                    className="input mt-1 min-h-[4rem]"
+                    value={notifTemplates.sms_client}
+                    onChange={(e) =>
+                      setNotifTemplates({
+                        ...notifTemplates,
+                        sms_client: e.target.value,
+                      })
+                    }
+                  />
+                  <span className="mt-1 block text-xs text-[var(--taupe)]">
+                    {notifTemplates.sms_client.length} chars
+                  </span>
+                </label>
+              </div>
+
+              <div className="card space-y-3 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="heading-section text-lg">Live preview</p>
+                  <select
+                    className="input max-w-[10rem]"
+                    value={notifPreviewRole}
+                    onChange={(e) =>
+                      setNotifPreviewRole(
+                        e.target.value as "pro" | "owner" | "client"
+                      )
+                    }
+                  >
+                    <option value="pro">Professional</option>
+                    <option value="owner">Owner</option>
+                    <option value="client">Client</option>
+                  </select>
+                </div>
+                <p className="text-sm">
+                  <span className="text-[var(--taupe)]">Subject: </span>
+                  {applyPreview(
+                    notifTemplates[
+                      `email_${notifPreviewRole}_subject` as keyof NotifTemplates
+                    ]
+                  )}
+                </p>
+                <p className="text-xl font-semibold tracking-tight">
+                  {applyPreview(
+                    notifTemplates[
+                      `email_${notifPreviewRole}_headline` as keyof NotifTemplates
+                    ]
+                  )}
+                </p>
+                <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                  {applyPreview(
+                    notifTemplates[
+                      `email_${notifPreviewRole}_intro` as keyof NotifTemplates
+                    ]
+                  )}
+                </div>
+                <div className="rounded-lg border border-[var(--line)] p-3 text-sm">
+                  <p className="text-[var(--taupe)]">Details card (auto)</p>
+                  <p>Ref: ANA-1A2B</p>
+                  <p>Service: Classic lashes</p>
+                  <p>When: Tue Sep 29, 2:00 PM (Houston)</p>
+                  <p>Place: 123 Main St, Houston</p>
+                  <p>Price: $120</p>
+                </div>
+                <p className="text-xs text-[var(--taupe)]">
+                  {applyPreview(
+                    notifTemplates[
+                      `email_${notifPreviewRole}_footer` as keyof NotifTemplates
+                    ]
+                  )}
+                </p>
+                <div className="border-t border-[var(--line)] pt-3 text-sm">
+                  <p className="text-[var(--taupe)]">SMS preview</p>
+                  <p className="mt-1 whitespace-pre-wrap">
+                    {applyPreview(
+                      notifPreviewRole === "client"
+                        ? notifTemplates.sms_client
+                        : notifTemplates.sms_pro
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={saving}
+                onClick={() => void saveNotifications()}
+              >
+                {saving ? t.loading : t.save}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
     </div>
   );
 }

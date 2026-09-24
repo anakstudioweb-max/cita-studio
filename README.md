@@ -43,7 +43,7 @@ npm install
 npm run db:seed
 ```
 
-`npm run db:seed` runs `supabase/migrations/001_init.sql` then inserts owner, catalog, and three professionals.
+`npm run db:migrate` applies all `supabase/migrations/*.sql` (including notification templates). `npm run db:seed` runs `001_init.sql` then inserts owner, catalog, and three professionals.
 
 Schema file: `supabase/migrations/001_init.sql` (RLS sketched in comments; app auth is cookie JWT over the DB connection).
 
@@ -68,6 +68,15 @@ Professionals are created from `/admin` → Professionals. Alias `user` only wor
 Change credentials in UI:
 - **Owner**: `/admin` → Owner account (email and/or password)
 - **Pro**: `/admin` → Professionals → expand artist → Change email / Set password
+
+## Notification templates
+
+Owner can edit booking email/SMS copy from **`/admin` → Notifications** (no code deploy).
+
+- Emails: subject, headline, intro, footer per role (professional / owner / client). Booking details card is always auto-filled.
+- SMS: one text field each for professional and client.
+- Placeholders: `{{ref}}`, `{{service}}`, `{{when}}`, `{{place}}`, `{{price}}`, `{{clientName}}`, `{{clientPhone}}`, `{{clientEmail}}`, `{{professionalName}}`, `{{notes}}`
+- Stored in `notification_templates`. `OWNER_NOTIFY_EMAIL` still comes from env.
 
 ## Routes
 

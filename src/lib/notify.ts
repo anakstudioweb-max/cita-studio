@@ -1,4 +1,13 @@
 import { digitsOnly } from "@/lib/utils";
+import {
+  applyPlaceholders,
+  applyPlaceholdersHtml,
+  emailFieldsForRole,
+  escapeHtml,
+  loadTemplates,
+  type PlaceholderVars,
+  type TemplateMap,
+} from "@/lib/notification-templates";
 
 export type NotifyStatus = "sent" | "skipped" | "failed";
 
@@ -24,13 +33,19 @@ function moneyUsd(cents: number) {
   return `$${(cents / 100).toFixed(0)}`;
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+function placeholderVars(p: BookingNotifyPayload): PlaceholderVars {
+  return {
+    ref: p.refCode,
+    service: p.serviceName,
+    when: p.whenLabel,
+    place: p.place,
+    price: moneyUsd(p.priceCents),
+    clientName: p.clientName,
+    clientPhone: p.clientPhone,
+    clientEmail: p.clientEmail?.trim() || "",
+    professionalName: p.professionalName,
+    notes: p.notes?.trim() || "",
+  };
 }
 
 type DetailRow = { label: string; value: string };
@@ -69,33 +84,19 @@ function plainTextBody(p: BookingNotifyPayload, role: EmailRole): string {
     .join("\n");
 }
 
-/** Build Apple-clean HTML + plain text for a booking email role. */
-export function buildBookingEmail(
+/** Build Apple-clean HTML + plain text using DB/hardcoded templates. */
+export function buildBookingEmailFromTemplates(
   p: BookingNotifyPayload,
-  role: EmailRole
+  role: EmailRole,
+  templates: TemplateMap
 ): { subject: string; html: string; text: string } {
+  const vars = placeholderVars(p);
+  const fields = emailFieldsForRole(templates, role);
+  const subject = applyPlaceholders(fields.subject, vars);
+  const headline = applyPlaceholders(fields.headline, vars);
+  const introHtml = applyPlaceholdersHtml(fields.intro, vars);
+  const footerNote = applyPlaceholders(fields.footer, vars);
   const rows = detailRows(p, role);
-  let subject: string;
-  let h1: string;
-  let subtitle: string;
-  let intro = "";
-
-  if (role === "professional") {
-    subject = `New booking · ${p.refCode} · ${p.serviceName}`;
-    h1 = "New booking";
-    subtitle = "A client just requested an appointment with you.";
-    intro = `<strong>${escapeHtml(p.clientName)}</strong> · ${escapeHtml(p.clientPhone)} · ${escapeHtml(p.whenLabel)} (Houston)`;
-  } else if (role === "owner") {
-    subject = `Booking · ${p.refCode} · ${p.professionalName}`;
-    h1 = "Marketplace booking";
-    subtitle = "New booking on Anak.Studio.";
-    intro = `<strong>${escapeHtml(p.professionalName)}</strong> with <strong>${escapeHtml(p.clientName)}</strong>`;
-  } else {
-    subject = `You're booked · ${p.refCode}`;
-    h1 = "Request received";
-    subtitle = "Thanks — your booking request is in.";
-    intro = `Hi ${escapeHtml(p.clientName)}, your professional will confirm soon.`;
-  }
 
   const rowHtml = rows
     .map(
@@ -132,13 +133,12 @@ export function buildBookingEmail(
           </tr>
           <tr>
             <td style="padding:16px 32px 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
-              <h1 style="margin:0;font-size:28px;line-height:1.15;font-weight:600;letter-spacing:-0.03em;color:#1d1d1f;">${escapeHtml(h1)}</h1>
-              <p style="margin:10px 0 0;font-size:15px;line-height:1.45;color:#6e6e73;">${escapeHtml(subtitle)}</p>
+              <h1 style="margin:0;font-size:28px;line-height:1.15;font-weight:600;letter-spacing:-0.03em;color:#1d1d1f;">${escapeHtml(headline)}</h1>
             </td>
           </tr>
           <tr>
             <td style="padding:8px 32px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
-              <p style="margin:0;font-size:15px;line-height:1.5;color:#1d1d1f;">${intro}</p>
+              ${introHtml}
             </td>
           </tr>
           <tr>
@@ -152,7 +152,7 @@ export function buildBookingEmail(
             <td style="padding:24px 32px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
               <div style="border-top:1px solid #e8e8ed;padding-top:20px;">
                 <p style="margin:0;font-size:12px;line-height:1.5;color:#6e6e73;">Anak.Studio · Houston lashes &amp; brows</p>
-                <p style="margin:6px 0 0;font-size:12px;line-height:1.5;color:#6e6e73;">Questions? Reply to this email or WhatsApp your professional.</p>
+                <p style="margin:6px 0 0;font-size:12px;line-height:1.5;color:#6e6e73;">${escapeHtml(footerNote)}</p>
               </div>
             </td>
           </tr>
@@ -163,18 +163,19 @@ export function buildBookingEmail(
 </body>
 </html>`;
 
-  let textLead: string;
-  if (role === "professional") {
-    textLead = `New booking for ${p.professionalName}.\nClient: ${p.clientName} · ${p.clientPhone}\n`;
-  } else if (role === "owner") {
-    textLead = `Marketplace booking.\nPro: ${p.professionalName}\nClient: ${p.clientName}\n`;
-  } else {
-    textLead = `Hi ${p.clientName} — your booking request was received. Your professional will confirm soon.\n`;
-  }
-
-  const text = `${textLead}\n${plainTextBody(p, role)}\n\nAnak.Studio · Houston lashes & brows\nQuestions? Reply to this email or WhatsApp your professional.`;
+  const introPlain = applyPlaceholders(fields.intro, vars);
+  const text = `${headline}\n\n${introPlain}\n\n${plainTextBody(p, role)}\n\nAnak.Studio · Houston lashes & brows\n${footerNote}`;
 
   return { subject, html, text };
+}
+
+/** Async wrapper: load templates then build. */
+export async function buildBookingEmail(
+  p: BookingNotifyPayload,
+  role: EmailRole
+): Promise<{ subject: string; html: string; text: string }> {
+  const templates = await loadTemplates();
+  return buildBookingEmailFromTemplates(p, role, templates);
 }
 
 /** Normalize to E.164 when possible (assume US +1 if 10 digits). */
@@ -294,11 +295,12 @@ export async function sendBookingEmails(
     return { status: "skipped", clientSent: false };
   }
 
+  const templates = await loadTemplates();
   const results: NotifyStatus[] = [];
   let clientSent = false;
 
   if (p.professionalEmail?.includes("@")) {
-    const mail = buildBookingEmail(p, "professional");
+    const mail = buildBookingEmailFromTemplates(p, "professional", templates);
     results.push(
       await sendResendEmail({
         to: p.professionalEmail,
@@ -311,7 +313,7 @@ export async function sendBookingEmails(
 
   const ownerEmail = resolveOwnerEmail(p);
   if (ownerEmail) {
-    const mail = buildBookingEmail(p, "owner");
+    const mail = buildBookingEmailFromTemplates(p, "owner", templates);
     results.push(
       await sendResendEmail({
         to: ownerEmail,
@@ -324,7 +326,7 @@ export async function sendBookingEmails(
 
   const clientEmail = p.clientEmail?.trim();
   if (clientEmail?.includes("@")) {
-    const mail = buildBookingEmail(p, "client");
+    const mail = buildBookingEmailFromTemplates(p, "client", templates);
     const st = await sendResendEmail({
       to: clientEmail,
       subject: mail.subject,
@@ -352,8 +354,11 @@ export async function sendBookingSms(
     return { status: "skipped", clientSent: false };
   }
 
-  const short =
-    `Anak.Studio ${p.refCode}: ${p.serviceName} · ${p.whenLabel} Houston · ${p.place} · ${moneyUsd(p.priceCents)} · ${p.clientName}`;
+  const templates = await loadTemplates();
+  const vars = placeholderVars(p);
+  const proText = applyPlaceholders(templates.sms_pro, vars);
+  const clientText = applyPlaceholders(templates.sms_client, vars);
+
   const results: NotifyStatus[] = [];
   let clientSent = false;
 
@@ -362,7 +367,7 @@ export async function sendBookingSms(
     results.push(
       await sendTelnyxSms({
         to: proPhone,
-        text: `New booking — ${short}`,
+        text: proText,
       })
     );
   }
@@ -370,7 +375,7 @@ export async function sendBookingSms(
   if (p.clientPhone && toE164(p.clientPhone)) {
     const st = await sendTelnyxSms({
       to: p.clientPhone,
-      text: `Booking requested — ${short}. Your pro will confirm soon.`,
+      text: clientText,
     });
     results.push(st);
     clientSent = st === "sent";

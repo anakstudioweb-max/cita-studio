@@ -138,3 +138,13 @@ export type Professional = typeof professionals.$inferSelect;
 export type CatalogService = typeof catalogServices.$inferSelect;
 export type ProfessionalService = typeof professionalServices.$inferSelect;
 export type Booking = typeof bookings.$inferSelect;
+
+export const notificationTemplates = pgTable("notification_templates", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull().default(""),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type NotificationTemplate = typeof notificationTemplates.$inferSelect;
