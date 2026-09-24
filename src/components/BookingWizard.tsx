@@ -1,397 +1,559 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  services,
-  formatPrice,
-  formatDuration,
-  weeklyAvailability,
-  dayNames,
-  getServiceById,
-} from "@/data/site";
-import { formatDateEs, toDateKey } from "@/lib/time";
+import { useEffect, useMemo, useState } from "react";
+import { useI18n } from "@/lib/i18n/context";
+import { money } from "@/lib/utils";
 
-type Step = 1 | 2 | 3 | 4 | 5;
-
-type Slot = { startTime: string; endTime: string };
-
-type Props = {
-  initialServiceId?: string;
+type CatalogService = {
+  id: string;
+  category: "lashes" | "brows";
+  name: string;
+  description: string;
+  durationMin: number;
+  fromPriceCents: number;
+  available: boolean;
 };
 
-export function BookingWizard({ initialServiceId }: Props) {
-  const [step, setStep] = useState<Step>(initialServiceId ? 2 : 1);
-  const [serviceId, setServiceId] = useState(initialServiceId || "");
-  const [date, setDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [slots, setSlots] = useState<Slot[]>([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
+type ProCard = {
+  id: string;
+  name: string;
+  bio: string;
+  photoUrl: string;
+  city: string;
+  address: string;
+  instagram: string;
+  service: {
+    id: string;
+    name: string;
+    durationMin: number;
+    priceCents: number;
+  };
+};
+
+type Confirmation = {
+  refCode: string;
+  whenLabel: string;
+  place: string;
+  priceCents: number;
+  professionalName: string;
+  serviceName: string;
+  whatsappUrl: string | null;
+  message: string;
+};
+
+const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+
+function monthMatrix(year: number, month: number) {
+  const first = new Date(Date.UTC(year, month, 1));
+  const startPad = first.getUTCDay();
+  const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < startPad; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+  return cells;
+}
+
+function todayStr() {
+  const f = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return f.format(new Date());
+}
+
+export function BookingWizard() {
+  const { t, locale } = useI18n();
+  const [step, setStep] = useState(1);
+  const [services, setServices] = useState<CatalogService[]>([]);
+  const [selectedService, setSelectedService] = useState<CatalogService | null>(
+    null
+  );
+  const [pros, setPros] = useState<ProCard[]>([]);
+  const [selectedPro, setSelectedPro] = useState<ProCard | null>(null);
+  const [cursor, setCursor] = useState(() => {
+    const now = new Date();
+    return { y: now.getFullYear(), m: now.getMonth() };
+  });
+  const [date, setDate] = useState<string | null>(null);
+  const [slots, setSlots] = useState<string[]>([]);
+  const [time, setTime] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
+  const [confirm, setConfirm] = useState<Confirmation | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [dbError, setDbError] = useState(false);
 
-  const service = useMemo(
-    () => (serviceId ? getServiceById(serviceId) : undefined),
-    [serviceId]
-  );
-
-  const openDays = useMemo(
-    () => new Set(weeklyAvailability.map((a) => a.day)),
-    []
-  );
-
-  const minDate = toDateKey(new Date());
-  const maxDateObj = new Date();
-  maxDateObj.setDate(maxDateObj.getDate() + 60);
-  const maxDate = toDateKey(maxDateObj);
-
-  const loadSlots = useCallback(async (sid: string, d: string) => {
-    setLoadingSlots(true);
-    setError(null);
-    setSlots([]);
-    setStartTime("");
-    try {
-      const res = await fetch(
-        `/api/slots?serviceId=${encodeURIComponent(sid)}&date=${encodeURIComponent(d)}`
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No se pudieron cargar los horarios");
-      setSlots(data.slots || []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al cargar horarios");
-    } finally {
-      setLoadingSlots(false);
-    }
+  useEffect(() => {
+    fetch("/api/catalog")
+      .then(async (r) => {
+        if (r.status === 503) setDbError(true);
+        return r.json();
+      })
+      .then((d) => setServices(d.services || []))
+      .catch(() => setDbError(true));
   }, []);
 
   useEffect(() => {
-    if (serviceId && date) {
-      void loadSlots(serviceId, date);
-    }
-  }, [serviceId, date, loadSlots]);
+    if (!selectedService) return;
+    setLoading(true);
+    fetch(`/api/professionals?service=${encodeURIComponent(selectedService.name)}`)
+      .then((r) => r.json())
+      .then((d) => setPros(d.professionals || []))
+      .finally(() => setLoading(false));
+  }, [selectedService]);
 
-  function onDateChange(value: string) {
-    if (!value) {
-      setDate("");
-      return;
-    }
-    const [y, m, d] = value.split("-").map(Number);
-    const picked = new Date(y, m - 1, d);
-    if (!openDays.has(picked.getDay())) {
-      setError(
-        `Cerrado ese día. Abrimos: ${weeklyAvailability.map((a) => dayNames[a.day]).join(", ")}.`
-      );
-      setDate("");
-      setSlots([]);
-      return;
-    }
-    setError(null);
-    setDate(value);
-  }
+  useEffect(() => {
+    if (!selectedPro || !date) return;
+    setLoading(true);
+    setTime(null);
+    fetch(
+      `/api/slots?professionalId=${selectedPro.id}&serviceId=${selectedPro.service.id}&date=${date}`
+    )
+      .then((r) => r.json())
+      .then((d) => setSlots(d.slots || []))
+      .finally(() => setLoading(false));
+  }, [selectedPro, date]);
+
+  const cells = useMemo(
+    () => monthMatrix(cursor.y, cursor.m),
+    [cursor.y, cursor.m]
+  );
+  const today = todayStr();
+  const monthLabel = new Intl.DateTimeFormat(locale, {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(cursor.y, cursor.m, 1));
 
   async function submit() {
-    if (!service) return;
-    setSubmitting(true);
+    if (!selectedPro || !date || !time) return;
+    setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/bookings", {
+      const res = await fetch("/api/book", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          serviceId,
+          professionalId: selectedPro.id,
+          professionalServiceId: selectedPro.service.id,
           date,
-          startTime,
-          customerName: name,
-          customerPhone: phone,
-          customerEmail: email,
-          notes: notes || undefined,
+          time,
+          clientName: name,
+          clientPhone: phone,
+          notes,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "No se pudo crear la cita");
+        setError(data.error || t.errorGeneric);
+        return;
       }
-      setConfirmed(true);
+      setConfirm(data.booking);
       setStep(5);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al reservar");
+    } catch {
+      setError(t.errorGeneric);
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   }
 
-  const stepsLabel = ["Servicio", "Fecha", "Hora", "Datos", "Listo"];
+  const lashes = services.filter((s) => s.category === "lashes");
+  const brows = services.filter((s) => s.category === "brows");
 
   return (
-    <div className="rounded-3xl border border-sand bg-white/80 p-5 shadow-sm sm:p-8">
-      {/* Progress */}
-      <ol className="mb-8 flex flex-wrap gap-2">
-        {stepsLabel.map((label, i) => {
-          const n = (i + 1) as Step;
+    <div className="space-y-10">
+      <section className="pt-4 sm:pt-8">
+        <p className="chip mb-5">{t.eyebrow}</p>
+        <h1 className="font-serif text-5xl leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
+          {t.title}
+          <br />
+          <em className="font-normal text-[var(--taupe)]">{t.titleItalic}</em>
+        </h1>
+        <p className="mt-5 max-w-xl text-lg leading-relaxed text-[var(--taupe)] sm:text-xl">
+          {t.sub}
+        </p>
+        <div className="gold-line mt-8 max-w-md" />
+      </section>
+
+      {dbError && (
+        <div className="card border-[var(--blush)]/40 p-4 text-sm text-[var(--taupe)]">
+          {t.dbMissing}
+        </div>
+      )}
+
+      <ol className="flex flex-wrap gap-3" aria-label="Booking steps">
+        {[
+          t.stepService,
+          t.stepPro,
+          t.stepWhen,
+          t.stepDetails,
+        ].map((label, i) => {
+          const n = i + 1;
           const active = step === n;
           const done = step > n;
           return (
             <li
               key={label}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
+              className={`inline-flex min-h-12 items-center gap-2 rounded-full border px-3 py-2 text-base ${
                 active
-                  ? "bg-rose text-white"
+                  ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--ivory)]"
                   : done
-                    ? "bg-blush/30 text-charcoal"
-                    : "bg-sand text-muted"
+                    ? "border-[var(--blush)] bg-[var(--paper)] text-[var(--ink)]"
+                    : "border-[var(--line)] text-[var(--taupe)]"
               }`}
+              aria-current={active ? "step" : undefined}
             >
-              {n}. {label}
+              <span className="step-dot bg-white/10">{n}</span>
+              <span className="pr-1 font-medium">{label}</span>
             </li>
           );
         })}
       </ol>
 
-      {error && (
-        <div className="mb-4 rounded-xl bg-rose/10 px-4 py-3 text-sm text-rose" role="alert">
-          {error}
-        </div>
-      )}
-
-      {/* Step 1: service */}
       {step === 1 && (
-        <div className="space-y-3">
-          <h2 className="font-display text-xl text-charcoal">¿Qué te gustaría hacer?</h2>
-          {services.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => {
-                setServiceId(s.id);
-                setStep(2);
-                setError(null);
-              }}
-              className="flex w-full items-start justify-between gap-3 rounded-2xl border border-sand p-4 text-left transition hover:border-blush hover:bg-cream"
-            >
-              <div>
-                <p className="font-medium text-charcoal">{s.name}</p>
-                <p className="mt-0.5 text-xs text-muted">{formatDuration(s.durationMinutes)}</p>
-              </div>
-              <span className="font-semibold text-rose">{formatPrice(s.price)}</span>
-            </button>
-          ))}
-        </div>
+        <section className="space-y-8">
+          <ServiceGroup
+            title={t.lashes}
+            items={lashes}
+            locale={locale}
+            minutesLabel={t.minutes}
+            onSelect={(s) => {
+              setSelectedService(s);
+              setSelectedPro(null);
+              setDate(null);
+              setTime(null);
+              setStep(2);
+            }}
+          />
+          <ServiceGroup
+            title={t.brows}
+            items={brows}
+            locale={locale}
+            minutesLabel={t.minutes}
+            onSelect={(s) => {
+              setSelectedService(s);
+              setSelectedPro(null);
+              setDate(null);
+              setTime(null);
+              setStep(2);
+            }}
+          />
+        </section>
       )}
 
-      {/* Step 2: date */}
-      {step === 2 && service && (
-        <div>
-          <h2 className="font-display text-xl text-charcoal">Elige la fecha</h2>
-          <p className="mt-1 text-sm text-muted">
-            {service.name} · {formatDuration(service.durationMinutes)} · {formatPrice(service.price)}
-          </p>
-          <label className="mt-6 block text-sm font-medium text-charcoal">
-            Fecha
-            <input
-              type="date"
-              min={minDate}
-              max={maxDate}
-              value={date}
-              onChange={(e) => onDateChange(e.target.value)}
-              className="mt-2 w-full rounded-xl border border-sand bg-cream px-4 py-3 text-charcoal outline-none focus:border-blush focus:ring-2 focus:ring-blush/30"
-            />
-          </label>
-          <p className="mt-2 text-xs text-muted">
-            Abierto: {weeklyAvailability.map((a) => dayNames[a.day]).join(", ")}{" "}
-            ({weeklyAvailability[0]?.open}–{weeklyAvailability[0]?.close})
-          </p>
-          <div className="mt-6 flex gap-3">
-            <button
-              type="button"
-              onClick={() => setStep(1)}
-              className="rounded-full px-4 py-2 text-sm text-muted hover:bg-sand"
-            >
-              Atrás
-            </button>
-            <button
-              type="button"
-              disabled={!date}
-              onClick={() => setStep(3)}
-              className="rounded-full bg-rose px-5 py-2 text-sm font-medium text-white disabled:opacity-40"
-            >
-              Continuar
+      {step === 2 && selectedService && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-serif text-3xl">{selectedService.name}</h2>
+            <button className="btn btn-ghost" onClick={() => setStep(1)}>
+              {t.back}
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Step 3: time */}
-      {step === 3 && service && (
-        <div>
-          <h2 className="font-display text-xl text-charcoal">Elige el horario</h2>
-          <p className="mt-1 text-sm capitalize text-muted">{formatDateEs(date)}</p>
-
-          {loadingSlots && (
-            <p className="mt-6 text-sm text-muted">Buscando horarios libres…</p>
+          {loading && <p className="text-[var(--taupe)]">{t.loading}</p>}
+          {!loading && pros.length === 0 && (
+            <p className="card p-6 text-[var(--taupe)]">{t.noPros}</p>
           )}
-
-          {!loadingSlots && slots.length === 0 && (
-            <p className="mt-6 text-sm text-muted">
-              No hay horarios libres ese día. Prueba otra fecha.
-            </p>
-          )}
-
-          <div className="mt-6 grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {slots.map((slot) => (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {pros.map((p) => (
               <button
-                key={slot.startTime}
-                type="button"
-                onClick={() => setStartTime(slot.startTime)}
-                className={`rounded-xl border px-2 py-2.5 text-sm transition ${
-                  startTime === slot.startTime
-                    ? "border-rose bg-rose text-white"
-                    : "border-sand bg-cream text-charcoal hover:border-blush"
-                }`}
+                key={p.id}
+                className="card tap flex gap-4 p-4 text-left transition hover:border-[var(--blush)]"
+                onClick={() => {
+                  setSelectedPro(p);
+                  setStep(3);
+                }}
               >
-                {slot.startTime}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={p.photoUrl || "/avatars/luna.svg"}
+                  alt=""
+                  className="h-20 w-20 rounded-2xl object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="font-serif text-2xl leading-tight">{p.name}</p>
+                  <p className="mt-1 line-clamp-2 text-sm text-[var(--taupe)]">
+                    {p.bio}
+                  </p>
+                  <p className="mt-2 text-sm">
+                    {p.address}
+                    <span className="mx-2 text-[var(--muted)]">·</span>
+                    {money(p.service.priceCents, locale)}
+                    <span className="text-[var(--muted)]">
+                      {" "}
+                      / {p.service.durationMin}
+                      {t.minutes}
+                    </span>
+                  </p>
+                </div>
               </button>
             ))}
           </div>
-
-          <div className="mt-6 flex gap-3">
-            <button
-              type="button"
-              onClick={() => setStep(2)}
-              className="rounded-full px-4 py-2 text-sm text-muted hover:bg-sand"
-            >
-              Atrás
-            </button>
-            <button
-              type="button"
-              disabled={!startTime}
-              onClick={() => setStep(4)}
-              className="rounded-full bg-rose px-5 py-2 text-sm font-medium text-white disabled:opacity-40"
-            >
-              Continuar
-            </button>
-          </div>
-        </div>
+        </section>
       )}
 
-      {/* Step 4: details */}
-      {step === 4 && service && (
-        <div>
-          <h2 className="font-display text-xl text-charcoal">Tus datos</h2>
-          <p className="mt-1 text-sm text-muted">
-            {service.name} · {formatDateEs(date)} · {startTime}
-          </p>
+      {step === 3 && selectedPro && (
+        <section className="space-y-6">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-serif text-3xl">{t.pickDay}</h2>
+              <p className="text-sm text-[var(--taupe)]">
+                {selectedPro.name} · {selectedPro.service.name}
+              </p>
+            </div>
+            <button className="btn btn-ghost" onClick={() => setStep(2)}>
+              {t.back}
+            </button>
+          </div>
 
-          <form
-            className="mt-6 space-y-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void submit();
-            }}
-          >
-            <label className="block text-sm font-medium">
-              Nombre completo
-              <input
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-sand bg-cream px-4 py-2.5 outline-none focus:border-blush focus:ring-2 focus:ring-blush/30"
-                autoComplete="name"
-              />
-            </label>
-            <label className="block text-sm font-medium">
-              Teléfono / WhatsApp
-              <input
-                required
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-sand bg-cream px-4 py-2.5 outline-none focus:border-blush focus:ring-2 focus:ring-blush/30"
-                autoComplete="tel"
-              />
-            </label>
-            <label className="block text-sm font-medium">
-              Correo electrónico
-              <input
-                required
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-sand bg-cream px-4 py-2.5 outline-none focus:border-blush focus:ring-2 focus:ring-blush/30"
-                autoComplete="email"
-              />
-            </label>
-            <label className="block text-sm font-medium">
-              Notas (opcional)
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                className="mt-1.5 w-full rounded-xl border border-sand bg-cream px-4 py-2.5 outline-none focus:border-blush focus:ring-2 focus:ring-blush/30"
-                placeholder="Alergias, preferencias, etc."
-              />
-            </label>
-
-            <div className="flex gap-3 pt-2">
+          <div className="card p-4 sm:p-6">
+            <div className="mb-4 flex items-center justify-between">
               <button
-                type="button"
-                onClick={() => setStep(3)}
-                className="rounded-full px-4 py-2 text-sm text-muted hover:bg-sand"
+                className="tap rounded-full border border-[var(--line)] px-3"
+                onClick={() =>
+                  setCursor((c) => {
+                    const d = new Date(c.y, c.m - 1, 1);
+                    return { y: d.getFullYear(), m: d.getMonth() };
+                  })
+                }
               >
-                Atrás
+                ‹
               </button>
+              <p className="font-serif text-xl capitalize">{monthLabel}</p>
               <button
-                type="submit"
-                disabled={submitting}
-                className="rounded-full bg-rose px-5 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="tap rounded-full border border-[var(--line)] px-3"
+                onClick={() =>
+                  setCursor((c) => {
+                    const d = new Date(c.y, c.m + 1, 1);
+                    return { y: d.getFullYear(), m: d.getMonth() };
+                  })
+                }
               >
-                {submitting ? "Reservando…" : "Confirmar cita"}
+                ›
               </button>
             </div>
-          </form>
-        </div>
+            <div className="grid grid-cols-7 gap-1 text-center text-xs text-[var(--muted)]">
+              {DAY_LABELS.map((d, i) => (
+                <div key={i} className="py-2">
+                  {d}
+                </div>
+              ))}
+              {cells.map((day, i) => {
+                if (day == null) return <div key={i} />;
+                const ds = `${cursor.y}-${String(cursor.m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                const dow = new Date(Date.UTC(cursor.y, cursor.m, day, 12)).getUTCDay();
+                const closed = dow === 0 || dow === 1;
+                const past = ds < today;
+                const disabled = closed || past;
+                const selected = date === ds;
+                return (
+                  <button
+                    key={i}
+                    disabled={disabled}
+                    onClick={() => setDate(ds)}
+                    className={`tap min-h-14 rounded-2xl text-base font-medium ${
+                      selected
+                        ? "bg-[var(--ink)] text-[var(--ivory)]"
+                        : disabled
+                          ? "text-[var(--muted)]/40"
+                          : "hover:bg-[var(--paper)]"
+                    }`}
+                    title={closed ? t.closed : past ? t.past : ds}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {date && (
+            <div>
+              <h3 className="mb-3 font-serif text-2xl">{t.pickTime}</h3>
+              {loading && <p className="text-[var(--taupe)]">{t.loading}</p>}
+              {!loading && slots.length === 0 && (
+                <p className="text-[var(--taupe)]">{t.noSlots}</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {slots.map((s) => (
+                  <button
+                    key={s}
+                    className={`tap min-h-14 rounded-full border px-5 text-base font-medium ${
+                      time === s
+                        ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--ivory)]"
+                        : "border-[var(--line)]"
+                    }`}
+                    onClick={() => setTime(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+              {time && (
+                <button
+                  className="btn btn-primary mt-6"
+                  onClick={() => setStep(4)}
+                >
+                  {t.continue}
+                </button>
+              )}
+            </div>
+          )}
+        </section>
       )}
 
-      {/* Step 5: success */}
-      {(step === 5 || confirmed) && service && (
-        <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-blush/30 text-2xl text-rose">
-            ✓
+      {step === 4 && selectedPro && date && time && (
+        <section className="mx-auto max-w-lg space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-serif text-3xl">{t.stepDetails}</h2>
+            <button className="btn btn-ghost" onClick={() => setStep(3)}>
+              {t.back}
+            </button>
           </div>
-          <h2 className="mt-4 font-display text-2xl text-charcoal">¡Cita confirmada!</h2>
-          <p className="mt-3 text-sm text-muted">
-            {service.name}
-            <br />
-            <span className="capitalize">{formatDateEs(date)}</span> a las {startTime}
-            <br />
-            {name} · {phone}
-          </p>
-          <p className="mt-4 text-xs text-muted">
-            Guarda estos datos. Te contactaremos si hace falta reprogramar.
-          </p>
+          <div className="card space-y-1 p-4 text-sm text-[var(--taupe)]">
+            <p>
+              {selectedPro.service.name} · {selectedPro.name}
+            </p>
+            <p>
+              {date} · {time} · {money(selectedPro.service.priceCents, locale)}
+            </p>
+            <p>{selectedPro.address}</p>
+          </div>
+          <label className="block text-sm">
+            {t.yourName}
+            <input
+              className="input mt-1"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="name"
+            />
+          </label>
+          <label className="block text-sm">
+            {t.phone}
+            <input
+              className="input mt-1"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              autoComplete="tel"
+              inputMode="tel"
+            />
+          </label>
+          <label className="block text-sm">
+            {t.notes}
+            <textarea
+              className="input mt-1 min-h-[6rem] py-3"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+            />
+          </label>
+          {error && <p className="text-sm text-red-700">{error}</p>}
           <button
-            type="button"
-            onClick={() => {
-              setStep(1);
-              setServiceId("");
-              setDate("");
-              setStartTime("");
-              setName("");
-              setPhone("");
-              setEmail("");
-              setNotes("");
-              setConfirmed(false);
-              setError(null);
-            }}
-            className="mt-6 rounded-full border border-sand px-5 py-2 text-sm text-charcoal hover:bg-sand"
+            className="btn btn-primary w-full"
+            disabled={loading || name.trim().length < 2 || phone.trim().length < 7}
+            onClick={submit}
           >
-            Agendar otra cita
+            {loading ? t.submitting : t.submit}
           </button>
-        </div>
+        </section>
       )}
+
+      {step === 5 && confirm && (
+        <section className="mx-auto max-w-lg space-y-5">
+          <p className="chip">{t.confirmed}</p>
+          <h2 className="font-serif text-4xl sm:text-5xl tracking-tight">{confirm.refCode}</h2>
+          <div className="card space-y-3 p-5 text-sm">
+            <Row label={t.professional} value={confirm.professionalName} />
+            <Row label={t.stepService} value={confirm.serviceName} />
+            <Row label={t.date} value={confirm.whenLabel} />
+            <Row label={t.place} value={confirm.place} />
+            <Row label={t.price} value={money(confirm.priceCents, locale)} />
+          </div>
+          {confirm.whatsappUrl ? (
+            <a
+              className="btn btn-primary w-full"
+              href={confirm.whatsappUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {t.whatsappBtn}
+            </a>
+          ) : (
+            <button
+              className="btn btn-primary w-full"
+              onClick={async () => {
+                await navigator.clipboard.writeText(confirm.message);
+                setCopied(true);
+              }}
+            >
+              {copied ? t.copied : t.copyMsg}
+            </button>
+          )}
+          {!confirm.whatsappUrl ? null : (
+            <button
+              className="btn btn-ghost w-full"
+              onClick={async () => {
+                await navigator.clipboard.writeText(confirm.message);
+                setCopied(true);
+              }}
+            >
+              {copied ? t.copied : t.copyMsg}
+            </button>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4 border-b border-[var(--line)] pb-2 last:border-0">
+      <span className="text-[var(--muted)]">{label}</span>
+      <span className="text-right">{value}</span>
+    </div>
+  );
+}
+
+function ServiceGroup({
+  title,
+  items,
+  locale,
+  minutesLabel,
+  onSelect,
+}: {
+  title: string;
+  items: CatalogService[];
+  locale: string;
+  minutesLabel: string;
+  onSelect: (s: CatalogService) => void;
+}) {
+  if (!items.length) return null;
+  return (
+    <div>
+      <h2 className="mb-3 font-serif text-3xl">{title}</h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {items.map((s) => (
+          <button
+            key={s.id}
+            disabled={!s.available}
+            onClick={() => onSelect(s)}
+            className="card tap flex min-h-[5.5rem] items-center justify-between gap-3 p-6 text-left disabled:opacity-40"
+          >
+            <div>
+              <p className="font-serif text-3xl leading-tight">{s.name}</p>
+              <p className="mt-1 text-sm text-[var(--taupe)]">
+                {s.durationMin}
+                {minutesLabel}
+              </p>
+            </div>
+            <p className="text-xl font-medium">{money(s.fromPriceCents, locale)}</p>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

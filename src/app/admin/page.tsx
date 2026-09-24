@@ -1,142 +1,261 @@
 "use client";
 
-import { useState } from "react";
-import type { Booking } from "@/lib/types";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useI18n } from "@/lib/i18n/context";
+import { money } from "@/lib/utils";
+
+type Pro = {
+  id: string;
+  name: string;
+  email: string;
+  status: "pending" | "active" | "paused" | "expired";
+  paidUntil: string | null;
+  city: string;
+  address: string;
+  whatsapp: string;
+  bio: string;
+};
+
+type Booking = {
+  id: string;
+  refCode: string;
+  professionalId: string;
+  professionalName?: string;
+  serviceName?: string;
+  clientName: string;
+  startAt: string;
+  priceCents: number;
+  status: "requested" | "confirmed" | "done" | "cancelled";
+};
 
 export default function AdminPage() {
-  const [password, setPassword] = useState("");
-  const [authed, setAuthed] = useState(false);
+  const { t, locale } = useI18n();
+  const router = useRouter();
+  const [pros, setPros] = useState<Pro[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [filterPro, setFilterPro] = useState("");
+  const [tab, setTab] = useState<"pros" | "bookings">("pros");
+  const [msg, setMsg] = useState<string | null>(null);
 
-  async function login(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    try {
-      const loginRes = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      if (!loginRes.ok) {
-        const data = await loginRes.json();
-        throw new Error(data.error || "Contraseña incorrecta");
-      }
-
-      const res = await fetch("/api/bookings", {
-        headers: { "x-admin-password": password },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No autorizado");
-      setBookings(data.bookings || []);
-      setAuthed(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error");
-    } finally {
-      setLoading(false);
+  async function load() {
+    const me = await fetch("/api/auth/me").then((r) => r.json());
+    if (!me.user) {
+      router.push("/login");
+      return;
     }
+    if (me.user.role !== "owner") {
+      router.push("/pro");
+      return;
+    }
+    const p = await fetch("/api/admin/professionals").then((r) => r.json());
+    setPros(p.professionals || []);
+    const q = filterPro ? `?professionalId=${filterPro}` : "";
+    const b = await fetch(`/api/admin/bookings${q}`).then((r) => r.json());
+    setBookings(b.bookings || []);
   }
 
-  async function refresh() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/bookings", {
-        headers: { "x-admin-password": password },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No autorizado");
-      setBookings(data.bookings || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error");
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterPro]);
+
+  async function patchPro(id: string, patch: Partial<Pro>) {
+    await fetch("/api/admin/professionals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...patch }),
+    });
+    setMsg("Updated");
+    load();
   }
 
-  if (!authed) {
-    return (
-      <div className="mx-auto max-w-md px-4 py-16 sm:px-6">
-        <h1 className="font-display text-3xl text-charcoal">Admin</h1>
-        <p className="mt-2 text-sm text-muted">
-          Acceso con contraseña (variable <code className="text-xs">ADMIN_PASSWORD</code>).
-        </p>
-        <form onSubmit={login} className="mt-8 space-y-4">
-          <label className="block text-sm font-medium">
-            Contraseña
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-sand bg-white px-4 py-2.5 outline-none focus:border-blush focus:ring-2 focus:ring-blush/30"
-              autoComplete="current-password"
-            />
-          </label>
-          {error && <p className="text-sm text-rose">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-full bg-charcoal py-2.5 text-sm font-medium text-cream disabled:opacity-50"
-          >
-            {loading ? "Entrando…" : "Entrar"}
-          </button>
-        </form>
-      </div>
-    );
+  async function removePro(id: string) {
+    if (!confirm("Remove professional and cascade bookings?")) return;
+    await fetch(`/api/admin/professionals?id=${id}`, { method: "DELETE" });
+    load();
+  }
+
+  async function patchBooking(
+    id: string,
+    patch: { status?: Booking["status"]; priceCents?: number }
+  ) {
+    await fetch("/api/admin/bookings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...patch }),
+    });
+    load();
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-3xl text-charcoal">Próximas citas</h1>
+    <div className="space-y-6 pt-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="chip">{t.admin}</p>
+          <h1 className="mt-2 font-serif text-4xl">Anak.Studio</h1>
+        </div>
         <button
-          type="button"
-          onClick={() => void refresh()}
-          className="rounded-full border border-sand px-4 py-1.5 text-sm text-muted hover:bg-sand"
+          className="btn btn-ghost"
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" });
+            router.push("/login");
+          }}
         >
-          Actualizar
+          {t.logout}
         </button>
       </div>
 
-      {error && <p className="mt-4 text-sm text-rose">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          className={`tap rounded-full px-4 py-2 text-sm ${
+            tab === "pros"
+              ? "bg-[var(--ink)] text-[var(--ivory)]"
+              : "border border-[var(--line)]"
+          }`}
+          onClick={() => setTab("pros")}
+        >
+          {t.allPros}
+        </button>
+        <button
+          className={`tap rounded-full px-4 py-2 text-sm ${
+            tab === "bookings"
+              ? "bg-[var(--ink)] text-[var(--ivory)]"
+              : "border border-[var(--line)]"
+          }`}
+          onClick={() => setTab("bookings")}
+        >
+          {t.appointments}
+        </button>
+      </div>
+      {msg && <p className="text-sm text-[var(--blush)]">{msg}</p>}
 
-      {loading && <p className="mt-6 text-sm text-muted">Cargando…</p>}
-
-      {!loading && bookings.length === 0 && (
-        <p className="mt-8 rounded-2xl bg-sand/50 p-6 text-sm text-muted">
-          No hay citas próximas. Cuando alguien reserve en /agendar, aparecerán aquí.
-        </p>
+      {tab === "pros" && (
+        <div className="space-y-3">
+          {pros.map((p) => (
+            <div key={p.id} className="card space-y-3 p-4">
+              <div className="flex flex-wrap justify-between gap-2">
+                <div>
+                  <p className="font-serif text-2xl">{p.name}</p>
+                  <p className="text-sm text-[var(--taupe)]">
+                    {p.email} · {p.city}
+                  </p>
+                </div>
+                <button
+                  className="btn btn-ghost text-red-800"
+                  onClick={() => removePro(p.id)}
+                >
+                  {t.removePro}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <select
+                  className="input max-w-[10rem]"
+                  value={p.status}
+                  onChange={(e) =>
+                    patchPro(p.id, {
+                      status: e.target.value as Pro["status"],
+                    })
+                  }
+                >
+                  <option value="pending">Pending</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="expired">Expired</option>
+                </select>
+                <input
+                  className="input max-w-[12rem]"
+                  type="date"
+                  value={p.paidUntil || ""}
+                  onChange={(e) =>
+                    patchPro(p.id, { paidUntil: e.target.value || null })
+                  }
+                />
+                <button
+                  className="btn btn-ghost"
+                  onClick={() =>
+                    patchPro(p.id, {
+                      status: p.status === "active" ? "paused" : "active",
+                      paidUntil:
+                        p.status === "active"
+                          ? p.paidUntil
+                          : p.paidUntil || "2099-12-31",
+                    })
+                  }
+                >
+                  {t.toggleAccess}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
-      <ul className="mt-8 space-y-3">
-        {bookings.map((b) => (
-          <li
-            key={b.id}
-            className="rounded-2xl border border-sand bg-white/80 p-5 shadow-sm"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="font-medium text-charcoal">{b.serviceName}</p>
-                <p className="mt-1 text-sm text-muted">
-                  {b.date} · {b.startTime}–{b.endTime}
+      {tab === "bookings" && (
+        <div className="space-y-4">
+          <label className="text-sm">
+            {t.filterPro}
+            <select
+              className="input mt-1 max-w-sm"
+              value={filterPro}
+              onChange={(e) => setFilterPro(e.target.value)}
+            >
+              <option value="">All</option>
+              {pros.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {bookings.map((b) => (
+            <div key={b.id} className="card space-y-2 p-4">
+              <div className="flex flex-wrap justify-between gap-2">
+                <div>
+                  <p className="font-serif text-xl">{b.refCode}</p>
+                  <p className="text-sm text-[var(--taupe)]">
+                    {b.professionalName} · {b.serviceName} · {b.clientName}
+                  </p>
+                  <p className="text-sm">
+                    {new Date(b.startAt).toLocaleString("en-US", {
+                      timeZone: "America/Chicago",
+                    })}
+                  </p>
+                </div>
+                <p className="font-serif text-xl">
+                  {money(b.priceCents, locale)}
                 </p>
               </div>
-              <span className="rounded-full bg-blush/20 px-2.5 py-0.5 text-xs font-medium text-rose">
-                {b.status === "confirmed" ? "Confirmada" : b.status}
-              </span>
+              <div className="flex flex-wrap gap-2">
+                <select
+                  className="input max-w-[10rem]"
+                  value={b.status}
+                  onChange={(e) =>
+                    patchBooking(b.id, {
+                      status: e.target.value as Booking["status"],
+                    })
+                  }
+                >
+                  <option value="requested">{t.requested}</option>
+                  <option value="confirmed">{t.confirmedStatus}</option>
+                  <option value="done">{t.done}</option>
+                  <option value="cancelled">{t.cancelled}</option>
+                </select>
+                <input
+                  className="input max-w-[8rem]"
+                  type="number"
+                  defaultValue={b.priceCents / 100}
+                  onBlur={(e) =>
+                    patchBooking(b.id, {
+                      priceCents: Math.round(Number(e.target.value) * 100),
+                    })
+                  }
+                />
+              </div>
             </div>
-            <div className="mt-3 text-sm text-charcoal">
-              <p>{b.customerName}</p>
-              <p className="text-muted">
-                {b.customerPhone} · {b.customerEmail}
-              </p>
-              {b.notes && <p className="mt-2 text-muted italic">“{b.notes}”</p>}
-            </div>
-          </li>
-        ))}
-      </ul>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

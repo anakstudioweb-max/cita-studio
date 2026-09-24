@@ -1,36 +1,53 @@
 import { z } from "zod";
-import { services } from "@/data/site";
 
-const serviceIds = services.map((s) => s.id) as [string, ...string[]];
-
-export const createBookingSchema = z.object({
-  serviceId: z.enum(serviceIds, { message: "Servicio no válido" }),
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
-  startTime: z
-    .string()
-    .regex(/^\d{2}:\d{2}$/, "Hora inválida"),
-  customerName: z
-    .string()
-    .trim()
-    .min(2, "Ingresa tu nombre")
-    .max(80, "Nombre demasiado largo"),
-  customerPhone: z
-    .string()
-    .trim()
-    .min(7, "Ingresa un teléfono válido")
-    .max(20, "Teléfono demasiado largo"),
-  customerEmail: z
-    .string()
-    .trim()
-    .email("Correo electrónico inválido")
-    .max(120),
-  notes: z.string().trim().max(500, "Notas demasiado largas").optional(),
+export const bookSchema = z.object({
+  professionalId: z.string().uuid(),
+  professionalServiceId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  time: z.string().regex(/^\d{2}:\d{2}$/),
+  clientName: z.string().min(2).max(80),
+  clientPhone: z.string().min(7).max(20),
+  notes: z.string().max(500).optional().default(""),
 });
 
-export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+export const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+});
 
-export const adminLoginSchema = z.object({
-  password: z.string().min(1, "Contraseña requerida"),
+export const signupSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  name: z.string().min(2).max(80),
+  city: z.string().min(2).max(80).default("Houston"),
+});
+
+export const profileSchema = z.object({
+  name: z.string().min(2).max(80).optional(),
+  bio: z.string().max(800).optional(),
+  city: z.string().max(80).optional(),
+  address: z.string().max(200).optional(),
+  whatsapp: z.string().max(30).optional(),
+  instagram: z.string().max(80).optional(),
+  photoUrl: z.string().max(500).optional(),
+  hoursJson: z
+    .object({ start: z.string(), end: z.string() })
+    .optional(),
+  closedDaysJson: z.array(z.number().int().min(0).max(6)).optional(),
+  categories: z.enum(["lashes", "brows", "both"]).optional(),
+});
+
+export const serviceSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(2).max(80),
+  description: z.string().max(400).optional().default(""),
+  durationMin: z.number().int().min(15).max(480),
+  priceCents: z.number().int().min(0),
+  visible: z.boolean().optional().default(true),
+});
+
+export const bookingUpdateSchema = z.object({
+  id: z.string().uuid(),
+  status: z.enum(["requested", "confirmed", "done", "cancelled"]).optional(),
+  priceCents: z.number().int().min(0).optional(),
 });

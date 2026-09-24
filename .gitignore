@@ -42,3 +42,8 @@ yarn-error.log*
 next-env.d.ts
 data/bookings.json
 preview-shots/
+
+# local db / secrets
+data/*.db
+data/*.db-*
+.env.local

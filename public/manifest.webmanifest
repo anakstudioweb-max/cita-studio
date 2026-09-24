@@ -1,0 +1,30 @@
+{
+  "name": "Anak.Studio",
+  "short_name": "Anak",
+  "description": "Houston lashes and brows marketplace",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f1e9",
+  "theme_color": "#f8f1e9",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/brand/anak-studio-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/anak-studio-mark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

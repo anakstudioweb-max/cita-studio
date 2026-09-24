@@ -1,27 +1,34 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getAvailableSlots } from "@/lib/slots";
-import { getServiceById } from "@/data/site";
+import { NextResponse } from "next/server";
+import { and, eq, gte } from "drizzle-orm";
+import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
+import { getFreeSlots } from "@/lib/slots";
+import { isProPubliclyVisible, todayHoustonDateStr } from "@/lib/utils";
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const serviceId = searchParams.get("serviceId");
-  const date = searchParams.get("date");
-
-  if (!serviceId || !date) {
+export async function GET(req: Request) {
+  if (!hasDatabaseUrl()) {
     return NextResponse.json(
-      { error: "Faltan serviceId o date" },
-      { status: 400 }
+      { error: "DATABASE_URL is not configured", slots: [] },
+      { status: 503 }
     );
   }
-
-  if (!getServiceById(serviceId)) {
-    return NextResponse.json({ error: "Servicio no encontrado" }, { status: 404 });
+  const { searchParams } = new URL(req.url);
+  const professionalId = searchParams.get("professionalId");
+  const serviceId = searchParams.get("serviceId");
+  const date = searchParams.get("date");
+  if (!professionalId || !serviceId || !date) {
+    return NextResponse.json({ error: "Missing params" }, { status: 400 });
   }
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return NextResponse.json({ error: "Fecha inválida" }, { status: 400 });
+  const db = getDb();
+  const [pro] = await db
+    .select()
+    .from(schema.professionals)
+    .where(eq(schema.professionals.id, professionalId))
+    .limit(1);
+  if (!pro || !isProPubliclyVisible(pro)) {
+    return NextResponse.json({ error: "Professional not available", slots: [] }, { status: 404 });
   }
 
-  const slots = await getAvailableSlots(serviceId, date);
-  return NextResponse.json({ slots });
+  const result = await getFreeSlots({ professionalId, serviceId, dateStr: date });
+  return NextResponse.json(result);
 }
