@@ -13,6 +13,7 @@ type CatalogService = {
   description: string;
   durationMin: number;
   basePriceCents: number;
+  photoUrl?: string | null;
 };
 
 type ProService = {
@@ -24,6 +25,7 @@ type ProService = {
   durationMin: number;
   priceCents: number;
   visible: boolean;
+  photoUrl?: string | null;
 };
 
 type Pro = {
@@ -101,6 +103,7 @@ export default function AdminPage() {
         durationMin: number;
         priceCents: number;
         catalogServiceId: string;
+        photoUrl: string;
       }
     >
   >({});
@@ -439,6 +442,7 @@ export default function AdminPage() {
         durationMin: svc.durationMin,
         priceCents: svc.priceCents,
         visible: svc.visible ?? true,
+        photoUrl: svc.photoUrl || null,
         catalogServiceId: svc.catalogServiceId ?? null,
       }),
     });
@@ -473,6 +477,7 @@ export default function AdminPage() {
       durationMin: item.durationMin,
       priceCents: item.basePriceCents,
       visible: true,
+      photoUrl: item.photoUrl || null,
       catalogServiceId: item.id,
     });
   }
@@ -484,6 +489,7 @@ export default function AdminPage() {
       durationMin: 60,
       priceCents: 5000,
       catalogServiceId: "",
+      photoUrl: "",
     };
     if (!d.name.trim()) return;
     await saveProService(professionalId, {
@@ -492,6 +498,7 @@ export default function AdminPage() {
       durationMin: d.durationMin,
       priceCents: d.priceCents,
       visible: true,
+      photoUrl: d.photoUrl || null,
       catalogServiceId: d.catalogServiceId || null,
     });
     setNewSvcDraft((prev) => ({
@@ -502,6 +509,7 @@ export default function AdminPage() {
         durationMin: 60,
         priceCents: 5000,
         catalogServiceId: "",
+        photoUrl: "",
       },
     }));
   }
@@ -952,6 +960,7 @@ export default function AdminPage() {
                   durationMin: 60,
                   priceCents: 5000,
                   catalogServiceId: "",
+                  photoUrl: "",
                 };
               return (
                 <div key={p.id} className="card space-y-3 p-3.5">
@@ -1331,6 +1340,21 @@ export default function AdminPage() {
                                   }))
                                 }
                               />
+                              <input
+                                className="input sm:col-span-2"
+                                placeholder={t.photoUrl}
+                                value={s.photoUrl || ""}
+                                onChange={(e) =>
+                                  setProServices((prev) => ({
+                                    ...prev,
+                                    [p.id]: (prev[p.id] || []).map((x) =>
+                                      x.id === s.id
+                                        ? { ...x, photoUrl: e.target.value }
+                                        : x
+                                    ),
+                                  }))
+                                }
+                              />
                               <label className="text-sm">
                                 {t.duration}
                                 <input
@@ -1458,6 +1482,20 @@ export default function AdminPage() {
                                   [p.id]: {
                                     ...draft,
                                     description: e.target.value,
+                                  },
+                                }))
+                              }
+                            />
+                            <input
+                              className="input sm:col-span-2"
+                              placeholder={t.photoUrl}
+                              value={draft.photoUrl}
+                              onChange={(e) =>
+                                setNewSvcDraft((prev) => ({
+                                  ...prev,
+                                  [p.id]: {
+                                    ...draft,
+                                    photoUrl: e.target.value,
                                   },
                                 }))
                               }

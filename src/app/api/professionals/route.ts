@@ -70,6 +70,7 @@ export async function GET(req: Request) {
             description: s.description,
             durationMin: s.durationMin,
             priceCents: s.priceCents,
+            photoUrl: s.photoUrl || null,
           }))
           .sort((a, b) => a.name.localeCompare(b.name)),
       });
@@ -114,6 +115,7 @@ export async function GET(req: Request) {
               description: svc.description,
               durationMin: svc.durationMin,
               priceCents: svc.priceCents,
+              photoUrl: svc.photoUrl || null,
             },
           };
         });

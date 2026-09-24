@@ -17,6 +17,7 @@ const catalogSchema = z.object({
   description: z.string().max(400).optional().default(""),
   durationMin: z.number().int().min(15).max(480),
   basePriceCents: z.number().int().min(0),
+  photoUrl: z.string().max(500).nullable().optional(),
 });
 
 export async function GET() {
@@ -61,6 +62,7 @@ export async function PUT(req: Request) {
           description: body.description || "",
           durationMin: body.durationMin,
           basePriceCents: body.basePriceCents,
+          photoUrl: body.photoUrl ?? null,
         })
         .where(eq(schema.catalogServices.id, body.id))
         .returning();
@@ -90,6 +92,7 @@ export async function PUT(req: Request) {
         description: body.description || "",
         durationMin: body.durationMin,
         basePriceCents: body.basePriceCents,
+        photoUrl: body.photoUrl ?? null,
       })
       .returning();
 

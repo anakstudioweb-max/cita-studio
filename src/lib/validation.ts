@@ -115,6 +115,7 @@ export const serviceSchema = z.object({
   durationMin: z.number().int().min(15).max(480),
   priceCents: z.number().int().min(0),
   visible: z.boolean().optional().default(true),
+  photoUrl: z.string().max(500).nullable().optional(),
 });
 
 export const bookingUpdateSchema = z

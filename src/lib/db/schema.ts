@@ -83,6 +83,7 @@ export const catalogServices = pgTable("catalog_services", {
   description: text("description").notNull().default(""),
   durationMin: integer("duration_min").notNull(),
   basePriceCents: integer("base_price_cents").notNull(),
+  photoUrl: text("photo_url"),
 });
 
 export const professionalServices = pgTable(
@@ -101,6 +102,7 @@ export const professionalServices = pgTable(
     durationMin: integer("duration_min").notNull(),
     priceCents: integer("price_cents").notNull(),
     visible: boolean("visible").notNull().default(true),
+    photoUrl: text("photo_url"),
   },
   (t) => [index("pro_services_pro_idx").on(t.professionalId)]
 );

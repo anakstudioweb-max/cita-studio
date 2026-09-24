@@ -69,6 +69,7 @@ export async function GET() {
           description: s.description,
           durationMin: s.durationMin,
           basePriceCents: s.basePriceCents,
+          photoUrl: s.photoUrl || null,
           fromPriceCents: minPrice,
           available: matches.length > 0,
         };

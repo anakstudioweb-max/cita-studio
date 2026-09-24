@@ -24,6 +24,7 @@ type ProService = {
   description: string;
   durationMin: number;
   priceCents: number;
+  photoUrl?: string | null;
 };
 
 type Confirmation = {
@@ -333,34 +334,6 @@ export function BookingWizard() {
         </div>
       )}
 
-      {step < 5 && (
-        <ol className="flex flex-wrap gap-3" aria-label="Booking steps">
-          {[t.stepPro, t.stepService, t.stepWhen, t.stepDetails].map(
-            (label, i) => {
-              const n = i + 1;
-              const active = step === n;
-              const done = step > n;
-              return (
-                <li
-                  key={label}
-                  className={`inline-flex min-h-12 items-center gap-2 rounded-full border px-3 py-2 text-base ${
-                    active
-                      ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--ivory)]"
-                      : done
-                        ? "border-[var(--line)] bg-[var(--paper)] text-[var(--ink)]"
-                        : "border-[var(--line)] text-[var(--taupe)]"
-                  }`}
-                  aria-current={active ? "step" : undefined}
-                >
-                  <span className="step-dot bg-white/10">{n}</span>
-                  <span className="pr-1 font-medium">{label}</span>
-                </li>
-              );
-            }
-          )}
-        </ol>
-      )}
-
       {step === 1 && (
         <section className="space-y-4">
           <h2 className="heading-section text-2xl">{t.pickProfessional}</h2>
@@ -437,7 +410,7 @@ export function BookingWizard() {
               </div>
             </div>
             <button
-              className="btn btn-ghost"
+              className="tap text-sm text-[var(--taupe)] hover:text-[var(--ink)]"
               onClick={() => {
                 setStep(1);
                 setSelectedServices([]);
@@ -459,30 +432,51 @@ export function BookingWizard() {
                   type="button"
                   aria-pressed={selected}
                   onClick={() => toggleService(s)}
-                  className={`card tap flex min-h-[4.5rem] items-center justify-between gap-3 p-4 text-left transition ${
+                  className={`card tap flex min-h-[4.5rem] items-start gap-3 p-3.5 text-left transition ${
                     selected
                       ? "border-[var(--ink)] bg-[var(--paper)] ring-1 ring-[var(--ink)]"
                       : "hover:bg-[var(--paper)]"
                   }`}
                 >
-                  <div className="min-w-0">
-                    <p className="heading-section text-xl leading-tight">
-                      {s.name}
-                    </p>
-                    <p className="mt-1 text-sm text-[var(--taupe)]">
-                      {s.durationMin}
-                      {t.minutes}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-xl font-medium">
-                      {money(s.priceCents, locale)}
-                    </p>
-                    {selected ? (
-                      <p className="mt-1 text-xs font-medium text-[var(--ink)]">
-                        ✓
+                  {s.photoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={s.photoUrl}
+                      alt=""
+                      className="h-14 w-14 shrink-0 rounded-xl object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--paper)] text-xs font-medium text-[var(--muted)]"
+                      aria-hidden
+                    >
+                      {(s.name.trim().slice(0, 1) || "·").toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="heading-section text-lg leading-tight">
+                        {s.name}
+                      </p>
+                      {selected ? (
+                        <span className="shrink-0 text-xs font-medium text-[var(--ink)]">
+                          ✓
+                        </span>
+                      ) : null}
+                    </div>
+                    {s.description ? (
+                      <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-[var(--taupe)]">
+                        {s.description}
                       </p>
                     ) : null}
+                    <p className="mt-1.5 text-sm text-[var(--muted)]">
+                      {s.durationMin}
+                      {t.minutes}
+                      <span className="mx-1.5 text-[var(--line)]">·</span>
+                      <span className="font-medium text-[var(--ink)]">
+                        {money(s.priceCents, locale)}
+                      </span>
+                    </p>
                   </div>
                 </button>
               );
@@ -535,7 +529,7 @@ export function BookingWizard() {
                 {t.minutes} · {money(totalPrice, locale)}
               </p>
             </div>
-            <button className="btn btn-ghost" onClick={() => setStep(2)}>
+            <button className="tap text-sm text-[var(--taupe)] hover:text-[var(--ink)]" onClick={() => setStep(2)}>
               {t.back}
             </button>
           </div>
@@ -653,7 +647,7 @@ export function BookingWizard() {
           <section className="mx-auto max-w-lg space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="heading-section text-2xl">{t.stepDetails}</h2>
-              <button className="btn btn-ghost" onClick={() => setStep(3)}>
+              <button className="tap text-sm text-[var(--taupe)] hover:text-[var(--ink)]" onClick={() => setStep(3)}>
                 {t.back}
               </button>
             </div>

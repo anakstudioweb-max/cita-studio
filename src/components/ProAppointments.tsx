@@ -118,11 +118,13 @@ export function ProAppointments({
   }, [bookings]);
 
   const filteredList = useMemo(() => {
+    const now = Date.now();
     let list = [...bookings];
     if (filter === "upcoming") {
+      // All future (from now), ignore selected calendar day — chip clears selectedDay.
       list = list.filter(
         (b) =>
-          houstonDateStr(b.startAt) >= today &&
+          new Date(b.startAt).getTime() >= now &&
           b.status !== "cancelled" &&
           b.status !== "done"
       );
@@ -133,7 +135,7 @@ export function ProAppointments({
     } else if (filter === "past") {
       list = list.filter(
         (b) =>
-          houstonDateStr(b.startAt) < today ||
+          new Date(b.startAt).getTime() < now ||
           b.status === "done" ||
           b.status === "cancelled"
       );
@@ -144,7 +146,7 @@ export function ProAppointments({
     );
     if (filter === "past" || filter === "deleted") list.reverse();
     return list;
-  }, [bookings, filter, today]);
+  }, [bookings, filter]);
 
   const dayList = useMemo(() => {
     if (!selectedDay) return null;
@@ -247,34 +249,36 @@ export function ProAppointments({
       </div>
 
       {filter !== "deleted" && (
-        <div className="card overflow-hidden p-4 sm:p-5">
-          <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="card mx-auto max-w-[17rem] overflow-hidden p-2 sm:max-w-[18rem] sm:p-2.5">
+          <div className="mb-1 flex items-center justify-between gap-1">
             <button
               type="button"
-              className="btn btn-ghost px-3 py-1.5 text-sm"
+              className="tap rounded-full px-1.5 py-0.5 text-sm text-[var(--taupe)] hover:bg-[var(--paper)]"
               onClick={() => setMonth((m) => shiftMonth(m, -1))}
               aria-label="Previous month"
             >
               ‹
             </button>
-            <p className="heading-section text-lg">{monthLabel(month, locale)}</p>
+            <p className="heading-section text-xs capitalize sm:text-sm">
+              {monthLabel(month, locale)}
+            </p>
             <button
               type="button"
-              className="btn btn-ghost px-3 py-1.5 text-sm"
+              className="tap rounded-full px-1.5 py-0.5 text-sm text-[var(--taupe)] hover:bg-[var(--paper)]"
               onClick={() => setMonth((m) => shiftMonth(m, 1))}
               aria-label="Next month"
             >
               ›
             </button>
           </div>
-          <div className="grid grid-cols-7 gap-1 text-center text-[11px] uppercase tracking-wide text-[var(--muted)]">
+          <div className="grid grid-cols-7 gap-px text-center text-[9px] uppercase tracking-wide text-[var(--muted)]">
             {[t.sun, t.mon, t.tue, t.wed, t.thu, t.fri, t.sat].map((d) => (
-              <div key={d} className="py-1">
-                {d.slice(0, 2)}
+              <div key={d} className="py-0.5">
+                {d.slice(0, 1)}
               </div>
             ))}
           </div>
-          <div className="mt-1 grid grid-cols-7 gap-1">
+          <div className="grid grid-cols-7 gap-px">
             {Array.from({ length: leadBlank }).map((_, i) => (
               <div key={`b-${i}`} />
             ))}
@@ -289,7 +293,7 @@ export function ProAppointments({
                   onClick={() =>
                     setSelectedDay((d) => (d === dateStr ? null : dateStr))
                   }
-                  className={`relative flex aspect-square flex-col items-center justify-center rounded-xl text-sm transition ${
+                  className={`relative flex h-6 flex-col items-center justify-center rounded text-[10px] transition sm:h-7 sm:text-[11px] ${
                     isSelected
                       ? "bg-[var(--ink)] text-[var(--ivory)]"
                       : isToday
@@ -297,10 +301,12 @@ export function ProAppointments({
                         : "hover:bg-[var(--paper)]"
                   }`}
                 >
-                  <span className="font-medium">{Number(dateStr.slice(8))}</span>
+                  <span className="font-medium leading-none">
+                    {Number(dateStr.slice(8))}
+                  </span>
                   {count > 0 && (
                     <span
-                      className={`mt-0.5 h-1 w-1 rounded-full ${
+                      className={`mt-0.5 h-0.5 w-0.5 rounded-full ${
                         isSelected ? "bg-[var(--ivory)]" : "bg-[var(--ink)]"
                       }`}
                     />

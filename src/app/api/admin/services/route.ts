@@ -50,6 +50,7 @@ export async function PUT(req: Request) {
           durationMin: body.durationMin,
           priceCents: body.priceCents,
           visible: body.visible ?? true,
+          photoUrl: body.photoUrl ?? null,
           ...(body.catalogServiceId !== undefined
             ? { catalogServiceId: body.catalogServiceId }
             : {}),
@@ -73,6 +74,7 @@ export async function PUT(req: Request) {
         durationMin: body.durationMin,
         priceCents: body.priceCents,
         visible: body.visible ?? true,
+        photoUrl: body.photoUrl ?? null,
       })
       .returning();
     return NextResponse.json({ service: created });

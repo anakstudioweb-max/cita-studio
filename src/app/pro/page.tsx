@@ -30,6 +30,7 @@ type Svc = {
   priceCents: number;
   visible: boolean;
   catalogServiceId?: string | null;
+  photoUrl?: string | null;
 };
 
 type CatalogItem = {
@@ -38,6 +39,7 @@ type CatalogItem = {
   description: string;
   durationMin: number;
   basePriceCents: number;
+  photoUrl?: string | null;
 };
 
 const emptyDraft = {
@@ -46,6 +48,7 @@ const emptyDraft = {
   durationMin: 60,
   priceCents: 5000,
   visible: true,
+  photoUrl: "",
 };
 
 export default function ProPanelPage() {
@@ -93,12 +96,14 @@ export default function ProPanelPage() {
             description: string;
             durationMin: number;
             basePriceCents: number;
+            photoUrl?: string | null;
           }) => ({
             id: c.id,
             name: c.name,
             description: c.description || "",
             durationMin: c.durationMin,
             basePriceCents: c.basePriceCents,
+            photoUrl: c.photoUrl || null,
           })
         );
         setCatalog(items);
@@ -142,6 +147,7 @@ export default function ProPanelPage() {
         durationMin: svc.durationMin,
         priceCents: svc.priceCents,
         visible: svc.visible ?? true,
+        photoUrl: svc.photoUrl || null,
         catalogServiceId: svc.catalogServiceId ?? null,
       }),
     });
@@ -176,6 +182,7 @@ export default function ProPanelPage() {
       durationMin: draft.durationMin,
       priceCents: draft.priceCents,
       visible: draft.visible,
+      photoUrl: draft.photoUrl || null,
     });
     if (ok) {
       setDraft(emptyDraft);
@@ -195,6 +202,7 @@ export default function ProPanelPage() {
       durationMin: item.durationMin,
       priceCents: item.basePriceCents,
       visible: true,
+      photoUrl: item.photoUrl || null,
       catalogServiceId: item.id,
     });
   }
@@ -378,6 +386,14 @@ export default function ProPanelPage() {
                   }
                 />
                 <input
+                  className="input sm:col-span-2"
+                  placeholder={t.photoUrl}
+                  value={draft.photoUrl}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, photoUrl: e.target.value }))
+                  }
+                />
+                <input
                   className="input"
                   type="number"
                   placeholder={t.duration}
@@ -456,6 +472,20 @@ export default function ProPanelPage() {
                     all.map((x) =>
                       x.id === s.id
                         ? { ...x, description: e.target.value }
+                        : x
+                    )
+                  )
+                }
+              />
+              <input
+                className="input sm:col-span-2"
+                placeholder={t.photoUrl}
+                value={s.photoUrl || ""}
+                onChange={(e) =>
+                  setServices((all) =>
+                    all.map((x) =>
+                      x.id === s.id
+                        ? { ...x, photoUrl: e.target.value }
                         : x
                     )
                   )
