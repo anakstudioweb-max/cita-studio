@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { getSession } from "@/lib/auth/session";
+import { getSession, hashPassword } from "@/lib/auth/session";
 import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
-import { profileSchema } from "@/lib/validation";
+import { profileSchema, signupSchema } from "@/lib/validation";
+import { slugify } from "@/lib/utils";
 import { z } from "zod";
 
 async function requireOwner() {
@@ -64,6 +65,63 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ professional: updated });
 }
 
+/** Create professional + user account (owner-controlled). */
+export async function POST(req: Request) {
+  if (!(await requireOwner())) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!hasDatabaseUrl()) return NextResponse.json({ error: "No DB" }, { status: 503 });
+  try {
+    const body = signupSchema.parse(await req.json());
+    const db = getDb();
+    const email = body.email.toLowerCase();
+    const existing = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, email))
+      .limit(1);
+    if (existing.length) {
+      return NextResponse.json({ error: "Email already registered" }, { status: 409 });
+    }
+
+    const passwordHash = await hashPassword(body.password);
+    const [user] = await db
+      .insert(schema.users)
+      .values({ email, passwordHash, role: "professional" })
+      .returning();
+
+    let slug = slugify(body.name);
+    const clash = await db
+      .select()
+      .from(schema.professionals)
+      .where(eq(schema.professionals.slug, slug))
+      .limit(1);
+    if (clash.length) slug = `${slug}-${Date.now().toString(36)}`;
+
+    const [pro] = await db
+      .insert(schema.professionals)
+      .values({
+        userId: user.id,
+        name: body.name,
+        slug,
+        city: body.city || "Houston",
+        status: "active",
+        paidUntil: "2099-12-31",
+        categories: "both",
+        hoursJson: { start: "10:00", end: "19:00" },
+        closedDaysJson: [0, 1],
+      })
+      .returning();
+
+    return NextResponse.json({
+      professional: { ...pro, email: user.email },
+    });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: "Create professional failed" }, { status: 400 });
+  }
+}
+
 export async function DELETE(req: Request) {
   if (!(await requireOwner())) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -78,7 +136,7 @@ export async function DELETE(req: Request) {
     .where(eq(schema.professionals.id, id))
     .limit(1);
   if (!pro) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  // cascade bookings via FK; also remove user
+  // cascade bookings/services via FK; also remove user
   await db.delete(schema.professionals).where(eq(schema.professionals.id, id));
   await db.delete(schema.users).where(eq(schema.users.id, pro.userId));
   return NextResponse.json({ ok: true });
