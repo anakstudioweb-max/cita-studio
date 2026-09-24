@@ -15,30 +15,62 @@ const optionalClientEmail = z.preprocess(
     .optional()
 );
 
-export const bookSchema = z.object({
-  professionalId: z.string().uuid(),
-  professionalServiceId: z.string().uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().regex(/^\d{2}:\d{2}$/),
-  clientName: z.string().min(2).max(80),
-  clientPhone: z
-    .string()
-    .min(7)
-    .max(30)
-    .transform((raw, ctx) => {
-      const parsed = parseUsPhone(raw);
-      if (!parsed.ok) {
-        ctx.addIssue({
-          code: "custom",
-          message: parsed.error,
-        });
-        return z.NEVER;
-      }
-      return parsed.e164;
-    }),
-  clientEmail: optionalClientEmail,
-  notes: z.string().max(500).optional().default(""),
-});
+export const bookSchema = z
+  .object({
+    professionalId: z.string().uuid(),
+    /** Preferred: one or more professional_service ids. */
+    professionalServiceIds: z.array(z.string().uuid()).min(1).max(20).optional(),
+    /** Legacy single-service field (still accepted). */
+    professionalServiceId: z.string().uuid().optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    time: z.string().regex(/^\d{2}:\d{2}$/),
+    clientName: z.string().min(2).max(80),
+    clientPhone: z
+      .string()
+      .min(7)
+      .max(30)
+      .transform((raw, ctx) => {
+        const parsed = parseUsPhone(raw);
+        if (!parsed.ok) {
+          ctx.addIssue({
+            code: "custom",
+            message: parsed.error,
+          });
+          return z.NEVER;
+        }
+        return parsed.e164;
+      }),
+    clientEmail: optionalClientEmail,
+    notes: z.string().max(500).optional().default(""),
+  })
+  .superRefine((data, ctx) => {
+    const hasArray = (data.professionalServiceIds?.length ?? 0) > 0;
+    const hasSingle = Boolean(data.professionalServiceId);
+    if (!hasArray && !hasSingle) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Select at least one service",
+        path: ["professionalServiceIds"],
+      });
+    }
+  })
+  .transform((data) => {
+    const fromArray = data.professionalServiceIds ?? [];
+    const ids = [
+      ...new Set(
+        fromArray.length
+          ? fromArray
+          : data.professionalServiceId
+            ? [data.professionalServiceId]
+            : []
+      ),
+    ];
+    return {
+      ...data,
+      professionalServiceIds: ids,
+      professionalServiceId: ids[0]!,
+    };
+  });
 
 export const loginSchema = z.object({
   // Accept full email or short aliases: admin → admin@anak.studio; user → user@anak.studio if present

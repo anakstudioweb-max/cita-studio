@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, eq, gt, lt, ne } from "drizzle-orm";
+import { and, eq, gt, inArray, lt, ne } from "drizzle-orm";
 import { addMinutes } from "date-fns";
 import { ZodError } from "zod";
 import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
@@ -44,17 +44,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Studio closed that day" }, { status: 400 });
     }
 
-    const [svc] = await db
+    const serviceIds = body.professionalServiceIds;
+    const svcRows = await db
       .select()
       .from(schema.professionalServices)
-      .where(eq(schema.professionalServices.id, body.professionalServiceId))
-      .limit(1);
-    if (!svc || svc.professionalId !== pro.id || !svc.visible) {
+      .where(inArray(schema.professionalServices.id, serviceIds));
+
+    const byId = new Map(svcRows.map((s) => [s.id, s]));
+    const ordered = serviceIds.map((id) => byId.get(id)).filter(Boolean) as typeof svcRows;
+    if (ordered.length !== serviceIds.length) {
       return NextResponse.json({ error: "Service not available" }, { status: 404 });
     }
+    for (const svc of ordered) {
+      if (svc.professionalId !== pro.id || !svc.visible) {
+        return NextResponse.json({ error: "Service not available" }, { status: 404 });
+      }
+    }
+
+    const durationMin = ordered.reduce((sum, s) => sum + s.durationMin, 0);
+    const priceCents = ordered.reduce((sum, s) => sum + s.priceCents, 0);
+    const serviceNames = ordered.map((s) => s.name).join(" · ");
+    const primarySvc = ordered[0]!;
 
     const startAt = localToUtc(body.date, body.time);
-    const endAt = addMinutes(startAt, svc.durationMin);
+    const endAt = addMinutes(startAt, durationMin);
     if (startAt.getTime() < Date.now()) {
       return NextResponse.json({ error: "Slot is in the past" }, { status: 400 });
     }
@@ -95,14 +108,16 @@ export async function POST(req: Request) {
         .values({
           refCode,
           professionalId: pro.id,
-          professionalServiceId: svc.id,
+          professionalServiceId: primarySvc.id,
+          serviceIds,
+          serviceNames,
           clientName: body.clientName.trim(),
           clientPhone,
           clientEmail,
           notes: body.notes || "",
           startAt,
           endAt,
-          priceCents: svc.priceCents,
+          priceCents,
           status: "requested",
         })
         .returning();
@@ -111,10 +126,11 @@ export async function POST(req: Request) {
       const msg =
         `Hi ${pro.name}, I'd like to confirm my Anak.Studio booking.\n` +
         `Ref: ${booking.refCode}\n` +
-        `Service: ${svc.name}\n` +
+        `Service: ${serviceNames}\n` +
         `When: ${when} (Houston)\n` +
+        `Duration: ${durationMin} min\n` +
         `Place: ${pro.address}\n` +
-        `Price: $${(svc.priceCents / 100).toFixed(0)}\n` +
+        `Price: $${(priceCents / 100).toFixed(0)}\n` +
         `Client: ${booking.clientName} · ${booking.clientPhone}` +
         (booking.notes ? `\nNotes: ${booking.notes}` : "");
 
@@ -134,10 +150,11 @@ export async function POST(req: Request) {
 
       const notifyPayload = {
         refCode: booking.refCode,
-        serviceName: svc.name,
+        serviceName: serviceNames,
         whenLabel: when,
         place: pro.address || `${pro.city}`,
         priceCents: booking.priceCents,
+        durationMin,
         clientName: booking.clientName,
         clientPhone: booking.clientPhone,
         clientEmail: clientEmail || undefined,
@@ -204,8 +221,9 @@ export async function POST(req: Request) {
           city: pro.city,
           priceCents: booking.priceCents,
           professionalName: pro.name,
-          serviceName: svc.name,
-          durationMin: svc.durationMin,
+          serviceName: serviceNames,
+          serviceNames,
+          durationMin,
           startAt: startAt.toISOString(),
           endAt: endAt.toISOString(),
           whatsappUrl: wa,
@@ -236,7 +254,9 @@ export async function POST(req: Request) {
           ? "Enter a valid US phone number (10 digits, +1)"
           : field === "clientEmail"
             ? "Enter a valid email address"
-            : "Invalid booking details");
+            : field.includes("professionalService")
+              ? "Select at least one service"
+              : "Invalid booking details");
       return NextResponse.json(
         { error: message, field: field || undefined },
         { status: 400 }

@@ -18,6 +18,7 @@ export type BookingNotifyPayload = {
   whenLabel: string;
   place: string;
   priceCents: number;
+  durationMin?: number;
   clientName: string;
   clientPhone: string;
   clientEmail?: string;
@@ -56,6 +57,9 @@ function detailRows(p: BookingNotifyPayload, role: EmailRole): DetailRow[] {
     { label: "Ref", value: p.refCode },
     { label: "Service", value: p.serviceName },
     { label: "When", value: `${p.whenLabel} (Houston)` },
+    ...(p.durationMin
+      ? [{ label: "Duration", value: `${p.durationMin} min` }]
+      : []),
     { label: "Place", value: p.place },
     { label: "Price", value: moneyUsd(p.priceCents) },
   ];

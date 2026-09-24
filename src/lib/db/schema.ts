@@ -11,6 +11,7 @@ import {
   index,
   pgEnum,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const userRoleEnum = pgEnum("user_role", ["owner", "professional"]);
 export const proStatusEnum = pgEnum("pro_status", [
@@ -115,6 +116,13 @@ export const bookings = pgTable(
     professionalServiceId: uuid("professional_service_id")
       .notNull()
       .references(() => professionalServices.id, { onDelete: "restrict" }),
+    /** All selected professional_service ids (primary is also in professionalServiceId). */
+    serviceIds: uuid("service_ids")
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    /** Denormalized joined service names for display/emails. */
+    serviceNames: text("service_names").notNull().default(""),
     clientName: text("client_name").notNull(),
     clientPhone: text("client_phone").notNull(),
     clientEmail: text("client_email").notNull().default(""),

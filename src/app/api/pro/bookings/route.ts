@@ -58,7 +58,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     bookings: rows.map((r) => ({
       ...r.booking,
-      serviceName: r.serviceName,
+      serviceName: r.booking.serviceNames || r.serviceName,
     })),
     totals,
   });

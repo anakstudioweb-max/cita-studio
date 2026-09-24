@@ -1,5 +1,5 @@
-import { and, eq, gte, lt, ne, sql } from "drizzle-orm";
-import { addMinutes, format } from "date-fns";
+import { and, eq, gte, inArray, lt, ne } from "drizzle-orm";
+import { addMinutes } from "date-fns";
 import { getDb, schema } from "./db";
 import { todayHoustonDateStr } from "./utils";
 
@@ -45,7 +45,8 @@ function formatHm(mins: number) {
 
 export async function getFreeSlots(opts: {
   professionalId: string;
-  serviceId: string;
+  /** One or more professional_service ids — duration is the sum. */
+  serviceIds: string[];
   dateStr: string;
 }) {
   const db = getDb();
@@ -63,13 +64,21 @@ export async function getFreeSlots(opts: {
   if (opts.dateStr < todayHoustonDateStr())
     return { slots: [], reason: "past" as const };
 
-  const [svc] = await db
+  const ids = [...new Set(opts.serviceIds.filter(Boolean))];
+  if (!ids.length) return { slots: [], reason: "not_found" as const };
+
+  const svcRows = await db
     .select()
     .from(professionalServices)
-    .where(eq(professionalServices.id, opts.serviceId))
-    .limit(1);
-  if (!svc || svc.professionalId !== opts.professionalId)
+    .where(inArray(professionalServices.id, ids));
+  if (svcRows.length !== ids.length) {
     return { slots: [], reason: "not_found" as const };
+  }
+  for (const svc of svcRows) {
+    if (svc.professionalId !== opts.professionalId) {
+      return { slots: [], reason: "not_found" as const };
+    }
+  }
 
   const hours = (pro.hoursJson as { start: string; end: string }) || {
     start: "10:00",
@@ -77,7 +86,7 @@ export async function getFreeSlots(opts: {
   };
   const startM = parseHm(hours.start);
   const endM = parseHm(hours.end);
-  const duration = svc.durationMin;
+  const duration = svcRows.reduce((sum, s) => sum + s.durationMin, 0);
   const step = 30;
 
   const dayStart = localToUtc(opts.dateStr, "00:00");

@@ -1,6 +1,6 @@
 # Anak.Studio
 
-Quiet-luxury Houston marketplace for lashes & brows. Clients pick a professional, then a service, and book without an account. The professional calls or texts to confirm.
+Quiet-luxury Houston marketplace for lashes & brows. Clients pick a professional, then one or more services, and book without an account. The professional calls or texts to confirm.
 
 **Brand:** Anak.Studio · booking refs `ANA-XXXX` · English UI by default (auto EN / ES / PT / FR).
 
@@ -33,6 +33,15 @@ Copy `.env.example` → `.env.local`:
 | `OWNER_NOTIFY_EMAIL` | Optional | Inbox copied on every booking (fallback `admin@anak.studio` / first owner) |
 
 Without `DATABASE_URL`, booking APIs return a clear **503** config error (needed for Vercel if env is missing).
+
+### Multi-service bookings
+Clients can toggle **multiple services** from the chosen professional. One booking stores:
+- `professional_service_id` — primary (first) service (backward compatible)
+- `service_ids` — `uuid[]` of all selected professional services
+- `service_names` — denormalized joined names (` · `) for emails/admin/pro UI
+- `price_cents` / appointment window — **sum** of selected prices and durations
+
+Apply SQL: `supabase/migrations/004_multi_services.sql` (via `npm run db:migrate`).
 
 ## Database setup (Supabase)
 

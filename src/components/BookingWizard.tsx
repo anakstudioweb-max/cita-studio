@@ -130,9 +130,7 @@ export function BookingWizard() {
   const [pros, setPros] = useState<ProCard[]>([]);
   const [selectedPro, setSelectedPro] = useState<ProCard | null>(null);
   const [services, setServices] = useState<ProService[]>([]);
-  const [selectedService, setSelectedService] = useState<ProService | null>(
-    null
-  );
+  const [selectedServices, setSelectedServices] = useState<ProService[]>([]);
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return { y: now.getFullYear(), m: now.getMonth() };
@@ -153,6 +151,23 @@ export function BookingWizard() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirmation | null>(null);
   const [dbError, setDbError] = useState(false);
+
+  const selectedIds = useMemo(
+    () => selectedServices.map((s) => s.id),
+    [selectedServices]
+  );
+  const totalDuration = useMemo(
+    () => selectedServices.reduce((sum, s) => sum + s.durationMin, 0),
+    [selectedServices]
+  );
+  const totalPrice = useMemo(
+    () => selectedServices.reduce((sum, s) => sum + s.priceCents, 0),
+    [selectedServices]
+  );
+  const servicesLabel = useMemo(
+    () => selectedServices.map((s) => s.name).join(" · "),
+    [selectedServices]
+  );
 
   useEffect(() => {
     const ac = new AbortController();
@@ -191,12 +206,14 @@ export function BookingWizard() {
   }, [selectedPro]);
 
   useEffect(() => {
-    if (!selectedPro || !selectedService || !date) return;
+    if (!selectedPro || selectedIds.length === 0 || !date) return;
     const ac = new AbortController();
-    fetch(
-      `/api/slots?professionalId=${selectedPro.id}&serviceId=${selectedService.id}&date=${date}`,
-      { signal: ac.signal }
-    )
+    const qs = new URLSearchParams({
+      professionalId: selectedPro.id,
+      serviceIds: selectedIds.join(","),
+      date,
+    });
+    fetch(`/api/slots?${qs.toString()}`, { signal: ac.signal })
       .then((r) => r.json())
       .then((d) => {
         setSlots(d.slots || []);
@@ -208,7 +225,7 @@ export function BookingWizard() {
         setSlotsLoading(false);
       });
     return () => ac.abort();
-  }, [selectedPro, selectedService, date]);
+  }, [selectedPro, selectedIds, date]);
 
   const cells = useMemo(
     () => monthMatrix(cursor.y, cursor.m),
@@ -232,8 +249,19 @@ export function BookingWizard() {
     return null;
   }
 
+  function toggleService(s: ProService) {
+    setSelectedServices((prev) => {
+      const exists = prev.some((x) => x.id === s.id);
+      if (exists) return prev.filter((x) => x.id !== s.id);
+      return [...prev, s];
+    });
+    setDate(null);
+    setTime(null);
+    setSlots([]);
+  }
+
   async function submit() {
-    if (!selectedPro || !selectedService || !date || !time) return;
+    if (!selectedPro || selectedServices.length === 0 || !date || !time) return;
     const pErr = validatePhoneField(phone);
     const eErr = validateEmailField(email);
     setPhoneError(pErr);
@@ -256,7 +284,7 @@ export function BookingWizard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           professionalId: selectedPro.id,
-          professionalServiceId: selectedService.id,
+          professionalServiceIds: selectedServices.map((s) => s.id),
           date,
           time,
           clientName: name,
@@ -365,7 +393,7 @@ export function BookingWizard() {
                     className="tap flex min-w-0 flex-1 gap-4 text-left"
                     onClick={() => {
                       setSelectedPro(p);
-                      setSelectedService(null);
+                      setSelectedServices([]);
                       setServices([]);
                       setServicesLoading(true);
                       setDate(null);
@@ -418,7 +446,7 @@ export function BookingWizard() {
               />
               <div className="min-w-0">
                 <h2 className="heading-section text-2xl">
-                  {t.pickService}
+                  {t.pickServices || t.pickService}
                 </h2>
                 <p className="text-sm text-[var(--taupe)]">{selectedPro.name}</p>
               </div>
@@ -427,7 +455,7 @@ export function BookingWizard() {
               className="btn btn-ghost"
               onClick={() => {
                 setStep(1);
-                setSelectedService(null);
+                setSelectedServices([]);
               }}
             >
               {t.back}
@@ -438,44 +466,88 @@ export function BookingWizard() {
             <p className="empty-state">{t.noServices}</p>
           )}
           <div className="grid gap-3 sm:grid-cols-2">
-            {services.map((s) => (
+            {services.map((s) => {
+              const selected = selectedIds.includes(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => toggleService(s)}
+                  className={`card tap flex min-h-[4.5rem] items-center justify-between gap-3 p-4 text-left transition ${
+                    selected
+                      ? "border-[var(--ink)] bg-[var(--paper)] ring-1 ring-[var(--ink)]"
+                      : "hover:bg-[var(--paper)]"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="heading-section text-xl leading-tight">
+                      {s.name}
+                    </p>
+                    <p className="mt-1 text-sm text-[var(--taupe)]">
+                      {s.durationMin}
+                      {t.minutes}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xl font-medium">
+                      {money(s.priceCents, locale)}
+                    </p>
+                    {selected ? (
+                      <p className="mt-1 text-xs font-medium text-[var(--ink)]">
+                        ✓
+                      </p>
+                    ) : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedServices.length > 0 && (
+            <div className="card sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 border-[var(--ink)] p-4 shadow-sm">
+              <div>
+                <p className="text-sm text-[var(--taupe)]">
+                  {t.selectedTotal} · {selectedServices.length}
+                </p>
+                <p className="heading-section text-lg">
+                  {totalDuration}
+                  {t.minutes} · {money(totalPrice, locale)}
+                </p>
+              </div>
               <button
-                key={s.id}
                 type="button"
+                className="btn btn-primary"
                 onClick={() => {
-                  setSelectedService(s);
                   setDate(null);
                   setTime(null);
                   setSlots([]);
                   setStep(3);
                 }}
-                className="card tap flex min-h-[4.5rem] items-center justify-between gap-3 p-4 text-left transition hover:bg-[var(--paper)]"
               >
-                <div>
-                  <p className="heading-section text-xl leading-tight">
-                    {s.name}
-                  </p>
-                  <p className="mt-1 text-sm text-[var(--taupe)]">
-                    {s.durationMin}
-                    {t.minutes}
-                  </p>
-                </div>
-                <p className="text-xl font-medium">
-                  {money(s.priceCents, locale)}
-                </p>
+                {t.continue}
               </button>
-            ))}
-          </div>
+            </div>
+          )}
+          {!servicesLoading &&
+            services.length > 0 &&
+            selectedServices.length === 0 && (
+              <p className="text-sm text-[var(--taupe)]">{t.selectAtLeastOne}</p>
+            )}
         </section>
       )}
 
-      {step === 3 && selectedPro && selectedService && (
+      {step === 3 && selectedPro && selectedServices.length > 0 && (
         <section className="space-y-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="heading-section text-2xl">{t.pickDay}</h2>
               <p className="text-sm text-[var(--taupe)]">
-                {selectedPro.name} · {selectedService.name}
+                {selectedPro.name} · {servicesLabel}
+              </p>
+              <p className="mt-1 text-sm text-[var(--muted)]">
+                {totalDuration}
+                {t.minutes} · {money(totalPrice, locale)}
               </p>
             </div>
             <button className="btn btn-ghost" onClick={() => setStep(2)}>
@@ -588,107 +660,112 @@ export function BookingWizard() {
         </section>
       )}
 
-      {step === 4 && selectedPro && selectedService && date && time && (
-        <section className="mx-auto max-w-lg space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="heading-section text-2xl">{t.stepDetails}</h2>
-            <button className="btn btn-ghost" onClick={() => setStep(3)}>
-              {t.back}
-            </button>
-          </div>
-          <div className="card space-y-1 p-3.5 text-sm text-[var(--taupe)]">
-            <p>
-              {selectedService.name} · {selectedPro.name}
-            </p>
-            <p>
-              {date} · {time} · {money(selectedService.priceCents, locale)}
-            </p>
-            <p>{selectedPro.address}</p>
-          </div>
-          <label className="block text-sm">
-            {t.yourName}
-            <input
-              className="input mt-1"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoComplete="name"
-            />
-          </label>
-          <label className="block text-sm">
-            {t.phone}
-            <div className="mt-1 flex overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--ivory)] focus-within:border-[var(--ink)]">
-              <span
-                className="inline-flex items-center border-r border-[var(--line)] bg-[var(--paper)] px-3 text-sm font-medium text-[var(--taupe)]"
-                title="United States"
-              >
-                +1
-              </span>
-              <input
-                className="min-h-12 w-full flex-1 border-0 bg-transparent px-3 text-base outline-none"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value);
-                  if (phoneError) setPhoneError(null);
-                }}
-                onBlur={() => setPhoneError(validatePhoneField(phone))}
-                autoComplete="tel"
-                inputMode="tel"
-                placeholder="(832) 362-1746"
-                required
-                aria-invalid={!!phoneError}
-                aria-describedby="phone-hint"
-              />
+      {step === 4 &&
+        selectedPro &&
+        selectedServices.length > 0 &&
+        date &&
+        time && (
+          <section className="mx-auto max-w-lg space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="heading-section text-2xl">{t.stepDetails}</h2>
+              <button className="btn btn-ghost" onClick={() => setStep(3)}>
+                {t.back}
+              </button>
             </div>
-            <p
-              id="phone-hint"
-              className={`mt-1 text-xs ${phoneError ? "text-red-700" : "text-[var(--muted)]"}`}
+            <div className="card space-y-1 p-3.5 text-sm text-[var(--taupe)]">
+              <p>
+                {servicesLabel} · {selectedPro.name}
+              </p>
+              <p>
+                {date} · {time} · {totalDuration}
+                {t.minutes} · {money(totalPrice, locale)}
+              </p>
+              <p>{selectedPro.address}</p>
+            </div>
+            <label className="block text-sm">
+              {t.yourName}
+              <input
+                className="input mt-1"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+              />
+            </label>
+            <label className="block text-sm">
+              {t.phone}
+              <div className="mt-1 flex overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--ivory)] focus-within:border-[var(--ink)]">
+                <span
+                  className="inline-flex items-center border-r border-[var(--line)] bg-[var(--paper)] px-3 text-sm font-medium text-[var(--taupe)]"
+                  title="United States"
+                >
+                  +1
+                </span>
+                <input
+                  className="min-h-12 w-full flex-1 border-0 bg-transparent px-3 text-base outline-none"
+                  value={phone}
+                  onChange={(e) => {
+                    setPhone(e.target.value);
+                    if (phoneError) setPhoneError(null);
+                  }}
+                  onBlur={() => setPhoneError(validatePhoneField(phone))}
+                  autoComplete="tel"
+                  inputMode="tel"
+                  placeholder="(832) 362-1746"
+                  required
+                  aria-invalid={!!phoneError}
+                  aria-describedby="phone-hint"
+                />
+              </div>
+              <p
+                id="phone-hint"
+                className={`mt-1 text-xs ${phoneError ? "text-red-700" : "text-[var(--muted)]"}`}
+              >
+                {phoneError || t.phoneHint}
+              </p>
+            </label>
+            <label className="block text-sm">
+              {t.emailOptional}
+              <input
+                className="input mt-1"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailError) setEmailError(null);
+                }}
+                onBlur={() => setEmailError(validateEmailField(email))}
+                autoComplete="email"
+                inputMode="email"
+                aria-invalid={!!emailError}
+              />
+              {emailError && (
+                <p className="mt-1 text-xs text-red-700">{emailError}</p>
+              )}
+            </label>
+            <label className="block text-sm">
+              {t.notes}
+              <textarea
+                className="input mt-1 min-h-[6rem] py-3"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </label>
+            {error && <p className="text-sm text-red-700">{error}</p>}
+            <button
+              className="btn btn-primary w-full"
+              disabled={
+                loading ||
+                name.trim().length < 2 ||
+                !!phoneError ||
+                !!emailError ||
+                phone.trim().length < 7
+              }
+              onClick={submit}
             >
-              {phoneError || t.phoneHint}
-            </p>
-          </label>
-          <label className="block text-sm">
-            {t.emailOptional}
-            <input
-              className="input mt-1"
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                if (emailError) setEmailError(null);
-              }}
-              onBlur={() => setEmailError(validateEmailField(email))}
-              autoComplete="email"
-              inputMode="email"
-              aria-invalid={!!emailError}
-            />
-            {emailError && (
-              <p className="mt-1 text-xs text-red-700">{emailError}</p>
-            )}
-          </label>
-          <label className="block text-sm">
-            {t.notes}
-            <textarea
-              className="input mt-1 min-h-[6rem] py-3"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </label>
-          {error && <p className="text-sm text-red-700">{error}</p>}
-          <button
-            className="btn btn-primary w-full"
-            disabled={
-              loading ||
-              name.trim().length < 2 ||
-              !!phoneError ||
-              !!emailError ||
-              phone.trim().length < 7
-            }
-            onClick={submit}
-          >
-            {loading ? t.submitting : t.submit}
-          </button>
-        </section>
-      )}
+              {loading ? t.submitting : t.submit}
+            </button>
+          </section>
+        )}
 
       {step === 5 && confirm && (
         <section className="mx-auto max-w-lg space-y-5">
@@ -701,6 +778,12 @@ export function BookingWizard() {
             <Row label={t.professional} value={confirm.professionalName} />
             <Row label={t.stepService} value={confirm.serviceName} />
             <Row label={t.date} value={confirm.whenLabel} />
+            {confirm.durationMin ? (
+              <Row
+                label={t.duration}
+                value={`${confirm.durationMin}${t.minutes}`}
+              />
+            ) : null}
             <Row label={t.place} value={confirm.place} />
             <Row label={t.price} value={money(confirm.priceCents, locale)} />
           </div>

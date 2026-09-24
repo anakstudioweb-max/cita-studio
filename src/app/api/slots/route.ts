@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { and, eq, gte } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
 import { getFreeSlots } from "@/lib/slots";
-import { isProPubliclyVisible, todayHoustonDateStr } from "@/lib/utils";
+import { isProPubliclyVisible } from "@/lib/utils";
 
 export async function GET(req: Request) {
   if (!hasDatabaseUrl()) {
@@ -13,9 +13,19 @@ export async function GET(req: Request) {
   }
   const { searchParams } = new URL(req.url);
   const professionalId = searchParams.get("professionalId");
-  const serviceId = searchParams.get("serviceId");
   const date = searchParams.get("date");
-  if (!professionalId || !serviceId || !date) {
+  // Prefer serviceIds=id1,id2 — also accept legacy serviceId=
+  const serviceIdsParam = searchParams.get("serviceIds");
+  const serviceId = searchParams.get("serviceId");
+  const serviceIds = (
+    serviceIdsParam
+      ? serviceIdsParam.split(",").map((s) => s.trim()).filter(Boolean)
+      : serviceId
+        ? [serviceId]
+        : []
+  );
+
+  if (!professionalId || !serviceIds.length || !date) {
     return NextResponse.json({ error: "Missing params" }, { status: 400 });
   }
 
@@ -29,6 +39,10 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Professional not available", slots: [] }, { status: 404 });
   }
 
-  const result = await getFreeSlots({ professionalId, serviceId, dateStr: date });
+  const result = await getFreeSlots({
+    professionalId,
+    serviceIds,
+    dateStr: date,
+  });
   return NextResponse.json(result);
 }
