@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+:root {
+  --cream: #fbf7f4;
+  --sand: #f5ede6;
+  --blush: #e8a0a0;
+  --blush-dark: #d47878;
+  --rose: #c97b84;
+  --charcoal: #3d3330;
+  --muted: #8a7a74;
+  --background: var(--cream);
+  --foreground: var(--charcoal);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-cream: var(--cream);
+  --color-sand: var(--sand);
+  --color-blush: var(--blush);
+  --color-blush-dark: var(--blush-dark);
+  --color-rose: var(--rose);
+  --color-charcoal: var(--charcoal);
+  --color-muted: var(--muted);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--blush) 45%, white);
+}
