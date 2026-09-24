@@ -14,6 +14,10 @@ export const TEMPLATE_KEYS = [
   "email_client_headline",
   "email_client_intro",
   "email_client_footer",
+  "email_client_confirmed_subject",
+  "email_client_confirmed_headline",
+  "email_client_confirmed_intro",
+  "email_client_confirmed_footer",
   "sms_pro",
   "sms_client",
 ] as const;
@@ -54,6 +58,12 @@ export const DEFAULT_TEMPLATES: TemplateMap = {
   email_client_intro:
     "Thanks — your booking request is in.\n\nHi {{clientName}}, your professional will confirm soon.",
   email_client_footer:
+    "Questions? Reply to this email or WhatsApp your professional.",
+  email_client_confirmed_subject: "Confirmed · {{ref}} · {{service}}",
+  email_client_confirmed_headline: "You're confirmed",
+  email_client_confirmed_intro:
+    "Good news — {{professionalName}} confirmed your appointment.\n\nHi {{clientName}}, see you at the time below.",
+  email_client_confirmed_footer:
     "Questions? Reply to this email or WhatsApp your professional.",
   sms_pro:
     "New booking — Anak.Studio {{ref}}: {{service}} · {{when}} Houston · {{place}} · {{price}} · {{clientName}} {{clientPhone}}",

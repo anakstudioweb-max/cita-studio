@@ -117,8 +117,24 @@ export const serviceSchema = z.object({
   visible: z.boolean().optional().default(true),
 });
 
-export const bookingUpdateSchema = z.object({
-  id: z.string().uuid(),
-  status: z.enum(["requested", "confirmed", "done", "cancelled"]).optional(),
-  priceCents: z.number().int().min(0).optional(),
-});
+export const bookingUpdateSchema = z
+  .object({
+    id: z.string().uuid(),
+    status: z.enum(["requested", "confirmed", "done", "cancelled"]).optional(),
+    priceCents: z.number().int().min(0).optional(),
+    /** Houston local date YYYY-MM-DD — pair with time to reschedule. */
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    /** Houston local time HH:mm — pair with date to reschedule. */
+    time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasDate = Boolean(data.date);
+    const hasTime = Boolean(data.time);
+    if (hasDate !== hasTime) {
+      ctx.addIssue({
+        code: "custom",
+        message: "date and time must be provided together",
+        path: hasDate ? ["time"] : ["date"],
+      });
+    }
+  });

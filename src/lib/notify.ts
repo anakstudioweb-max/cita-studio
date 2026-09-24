@@ -447,6 +447,39 @@ export async function sendBookingEmails(
   };
 }
 
+
+/**
+ * Second email to the client when a professional confirms (and optionally
+ * reschedules) the appointment. No-ops when client email is missing or Resend unset.
+ */
+export async function sendBookingConfirmedEmail(
+  p: BookingNotifyPayload
+): Promise<NotifyStatus> {
+  const clientEmail = p.clientEmail?.trim();
+  if (!clientEmail?.includes("@")) return "skipped";
+
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const from = process.env.RESEND_FROM?.trim();
+  if (!apiKey || !from) return "skipped";
+
+  const templates = await loadTemplates();
+  const confirmedOverlay: TemplateMap = {
+    ...templates,
+    email_client_subject: templates.email_client_confirmed_subject,
+    email_client_headline: templates.email_client_confirmed_headline,
+    email_client_intro: templates.email_client_confirmed_intro,
+    email_client_footer: templates.email_client_confirmed_footer,
+  };
+  const mail = buildBookingEmailFromTemplates(p, "client", confirmedOverlay);
+  return sendResendEmail({
+    to: clientEmail,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+    role: "client",
+  });
+}
+
 /**
  * Outbound Telnyx SMS is disabled (no 10DLC). Staff text clients manually
  * using the copy-paste block in booking emails.

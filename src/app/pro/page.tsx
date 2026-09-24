@@ -44,12 +44,32 @@ type Booking = {
   refCode: string;
   clientName: string;
   clientPhone: string;
+  clientEmail?: string;
   startAt: string;
+  endAt?: string;
   priceCents: number;
   status: "requested" | "confirmed" | "done" | "cancelled";
   serviceName?: string;
   notes?: string;
 };
+
+/** Houston local date (YYYY-MM-DD) + time (HH:mm) from an ISO timestamp. */
+function houstonDateTime(iso: string): { date: string; time: string } {
+  const d = new Date(iso);
+  const date = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  const time = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Chicago",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+  return { date, time };
+}
 
 const emptyDraft = {
   name: "",
@@ -83,6 +103,11 @@ export default function ProPanelPage() {
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
   });
   const [saving, setSaving] = useState(false);
+  /** Pending confirm edits: bookingId → { date, time } in Houston local. */
+  const [editDrafts, setEditDrafts] = useState<
+    Record<string, { date: string; time: string }>
+  >({});
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   async function load() {
     const me = await fetch("/api/auth/me").then((r) => r.json());
@@ -98,8 +123,18 @@ export default function ProPanelPage() {
     const b = await fetch(`/api/pro/bookings?month=${month}`).then((r) =>
       r.json()
     );
-    setBookings(b.bookings || []);
+    const list: Booking[] = b.bookings || [];
+    setBookings(list);
     setTotals(b.totals || totals);
+    setEditDrafts((prev) => {
+      const next: Record<string, { date: string; time: string }> = { ...prev };
+      for (const booking of list) {
+        if (booking.status === "requested" && !next[booking.id]) {
+          next[booking.id] = houstonDateTime(booking.startAt);
+        }
+      }
+      return next;
+    });
     const s = await fetch("/api/pro/services").then((r) => r.json());
     setServices(s.services || []);
   }
@@ -234,19 +269,65 @@ export default function ProPanelPage() {
 
   async function updateBooking(
     id: string,
-    patch: { status?: Booking["status"]; priceCents?: number }
+    patch: {
+      status?: Booking["status"];
+      priceCents?: number;
+      date?: string;
+      time?: string;
+    }
   ) {
     const res = await fetch("/api/pro/bookings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...patch }),
     });
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      toast(data.error || t.errorGeneric, "error");
+      return false;
+    }
+    toast(patch.status ? "Status updated" : "Saved");
+    await load();
+    return true;
+  }
+
+  async function confirmBooking(id: string) {
+    const draft = editDrafts[id] || houstonDateTime(
+      bookings.find((b) => b.id === id)?.startAt || new Date().toISOString()
+    );
+    if (!draft.date || !draft.time) {
       toast(t.errorGeneric, "error");
       return;
     }
-    toast(patch.status ? "Status updated" : "Saved");
-    load();
+    setConfirmingId(id);
+    try {
+      const res = await fetch("/api/pro/bookings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          status: "confirmed",
+          date: draft.date,
+          time: draft.time,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast(data.error || t.errorGeneric, "error");
+        return;
+      }
+      toast(t.confirmedToast);
+      setEditDrafts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      await load();
+    } catch {
+      toast(t.errorGeneric, "error");
+    } finally {
+      setConfirmingId(null);
+    }
   }
 
   if (!pro) {
@@ -325,7 +406,11 @@ export default function ProPanelPage() {
             ))}
           </div>
           <div className="space-y-3">
-            {dayList.map((b) => (
+            {dayList.map((b) => {
+              const draft =
+                editDrafts[b.id] || houstonDateTime(b.startAt);
+              const isPending = b.status === "requested";
+              return (
               <div key={b.id} className="card space-y-2 p-3.5">
                 <div className="flex flex-wrap justify-between gap-2">
                   <div>
@@ -343,6 +428,57 @@ export default function ProPanelPage() {
                     {money(b.priceCents, locale)}
                   </p>
                 </div>
+                {isPending ? (
+                  <div className="flex flex-wrap items-end gap-2 border-t border-[var(--line)] pt-3">
+                    <label className="text-xs text-[var(--muted)]">
+                      {t.date}
+                      <input
+                        className="input mt-1 max-w-[11rem]"
+                        type="date"
+                        value={draft.date}
+                        onChange={(e) =>
+                          setEditDrafts((prev) => ({
+                            ...prev,
+                            [b.id]: { ...draft, date: e.target.value },
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="text-xs text-[var(--muted)]">
+                      {t.time}
+                      <input
+                        className="input mt-1 max-w-[8rem]"
+                        type="time"
+                        value={draft.time}
+                        onChange={(e) =>
+                          setEditDrafts((prev) => ({
+                            ...prev,
+                            [b.id]: { ...draft, time: e.target.value },
+                          }))
+                        }
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={confirmingId === b.id}
+                      onClick={() => confirmBooking(b.id)}
+                    >
+                      {confirmingId === b.id
+                        ? t.confirming
+                        : t.confirmAppointment}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      onClick={() =>
+                        updateBooking(b.id, { status: "cancelled" })
+                      }
+                    >
+                      {t.cancelled}
+                    </button>
+                  </div>
+                ) : (
                 <div className="flex flex-wrap gap-2">
                   <select
                     className="input max-w-[10rem]"
@@ -369,8 +505,10 @@ export default function ProPanelPage() {
                     }
                   />
                 </div>
+                )}
               </div>
-            ))}
+              );
+            })}
             {!dayList.length && (
               <p className="empty-state">No appointments this month.</p>
             )}

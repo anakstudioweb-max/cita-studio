@@ -6,7 +6,6 @@ import { useToast } from "@/components/Toast";
 import { money } from "@/lib/utils";
 import { parseUsPhone } from "@/lib/phone";
 import { instagramHref } from "@/lib/instagram";
-import { downloadIcs, googleCalendarUrl } from "@/lib/calendar";
 
 type ProCard = {
   id: string;
@@ -308,20 +307,6 @@ export function BookingWizard() {
       setLoading(false);
     }
   }
-
-  const calendarEvent = useMemo(() => {
-    if (!confirm?.startAt || !confirm?.endAt) return null;
-    const start = new Date(confirm.startAt);
-    const end = new Date(confirm.endAt);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
-    return {
-      title: `${confirm.serviceName} · ${confirm.professionalName}`,
-      description: `Anak.Studio booking ${confirm.refCode}\n${confirm.whenLabel}`,
-      location: confirm.place || "",
-      start,
-      end,
-    };
-  }, [confirm]);
 
   return (
     <div className="space-y-10">
@@ -798,30 +783,27 @@ export function BookingWizard() {
                 {t.whatsappBtn}
               </a>
             ) : null}
-            {calendarEvent ? (
-              <>
-                <a
-                  className="btn btn-ghost w-full"
-                  href={googleCalendarUrl(calendarEvent)}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {t.googleCalendar}
-                </a>
-                <button
-                  type="button"
-                  className="btn btn-ghost w-full"
-                  onClick={() =>
-                    downloadIcs(
-                      calendarEvent,
-                      `${confirm.refCode.toLowerCase()}.ics`
-                    )
-                  }
-                >
-                  {t.downloadIcs}
-                </button>
-              </>
-            ) : null}
+            <button
+              type="button"
+              className="btn btn-ghost w-full"
+              onClick={() => {
+                setConfirm(null);
+                setSelectedPro(null);
+                setServices([]);
+                setSelectedServices([]);
+                setDate(null);
+                setTime(null);
+                setSlots([]);
+                setName("");
+                setPhone("");
+                setEmail("");
+                setNotes("");
+                setError(null);
+                setStep(1);
+              }}
+            >
+              {t.backHome}
+            </button>
           </div>
         </section>
       )}
