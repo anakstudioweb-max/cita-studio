@@ -5,8 +5,15 @@ import * as schema from "./schema";
 let _client: ReturnType<typeof postgres> | null = null;
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
+/**
+ * Supabase transaction pooler (:6543) often rejects UPDATEs as read-only.
+ * Prefer session pooler (:5432) on the same pooler host for writable admin CRUD.
+ */
 function normalizeDatabaseUrl(raw: string) {
   let url = raw.trim().replace(/^["']|["']$/g, "");
+  if (url.includes("pooler.supabase.com") && url.includes(":6543/")) {
+    url = url.replace(":6543/", ":5432/");
+  }
   if (!/[?&]sslmode=/.test(url)) {
     url += url.includes("?") ? "&sslmode=require" : "?sslmode=require";
   }
