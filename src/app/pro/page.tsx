@@ -27,6 +27,15 @@ type Svc = {
   durationMin: number;
   priceCents: number;
   visible: boolean;
+  catalogServiceId?: string | null;
+};
+
+type CatalogItem = {
+  id: string;
+  name: string;
+  description: string;
+  durationMin: number;
+  basePriceCents: number;
 };
 
 type Booking = {
@@ -39,6 +48,14 @@ type Booking = {
   status: "requested" | "confirmed" | "done" | "cancelled";
   serviceName?: string;
   notes?: string;
+};
+
+const emptyDraft = {
+  name: "",
+  description: "",
+  durationMin: 60,
+  priceCents: 5000,
+  visible: true,
 };
 
 export default function ProPanelPage() {
@@ -56,6 +73,9 @@ export default function ProPanelPage() {
     cancelled: 0,
   });
   const [services, setServices] = useState<Svc[]>([]);
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [draft, setDraft] = useState(emptyDraft);
+  const [showAdd, setShowAdd] = useState(false);
   const [month, setMonth] = useState(() => {
     const n = new Date();
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
@@ -87,6 +107,30 @@ export default function ProPanelPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [month]);
 
+  useEffect(() => {
+    fetch("/api/catalog")
+      .then((r) => r.json())
+      .then((d) => {
+        const items = (d.services || []).map(
+          (c: {
+            id: string;
+            name: string;
+            description: string;
+            durationMin: number;
+            basePriceCents: number;
+          }) => ({
+            id: c.id,
+            name: c.name,
+            description: c.description || "",
+            durationMin: c.durationMin,
+            basePriceCents: c.basePriceCents,
+          })
+        );
+        setCatalog(items);
+      })
+      .catch(() => setCatalog([]));
+  }, []);
+
   const dayList = useMemo(() => {
     return [...bookings].sort(
       (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
@@ -101,17 +145,76 @@ export default function ProPanelPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(pro),
     });
-    if (res.ok) setMsg("Saved");
+    if (res.ok) setMsg(t.updated);
   }
 
-  async function saveService(svc: Svc) {
-    await fetch("/api/pro/services", {
+  async function saveService(
+    svc: Partial<Svc> & {
+      name: string;
+      durationMin: number;
+      priceCents: number;
+    }
+  ) {
+    const res = await fetch("/api/pro/services", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(svc),
+      body: JSON.stringify({
+        id: svc.id,
+        name: svc.name,
+        description: svc.description || "",
+        durationMin: svc.durationMin,
+        priceCents: svc.priceCents,
+        visible: svc.visible ?? true,
+        catalogServiceId: svc.catalogServiceId ?? null,
+      }),
     });
-    setMsg("Saved");
-    load();
+    if (!res.ok) {
+      setMsg(t.errorGeneric);
+      return false;
+    }
+    setMsg(svc.id ? t.updated : t.created);
+    await load();
+    return true;
+  }
+
+  async function deleteService(id: string) {
+    const res = await fetch(`/api/pro/services?id=${id}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setMsg(t.errorGeneric);
+      return;
+    }
+    if (data.softDeleted) setMsg(t.hideService);
+    else setMsg(t.updated);
+    await load();
+  }
+
+  async function addFreeForm() {
+    if (!draft.name.trim()) return;
+    const ok = await saveService({
+      name: draft.name.trim(),
+      description: draft.description,
+      durationMin: draft.durationMin,
+      priceCents: draft.priceCents,
+      visible: draft.visible,
+    });
+    if (ok) {
+      setDraft(emptyDraft);
+      setShowAdd(false);
+    }
+  }
+
+  async function addFromCatalog(catalogId: string) {
+    const item = catalog.find((c) => c.id === catalogId);
+    if (!item) return;
+    await saveService({
+      name: item.name,
+      description: item.description,
+      durationMin: item.durationMin,
+      priceCents: item.basePriceCents,
+      visible: true,
+      catalogServiceId: item.id,
+    });
   }
 
   async function updateBooking(
@@ -336,7 +439,113 @@ export default function ProPanelPage() {
       )}
 
       {tab === "services" && (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={() => setShowAdd((v) => !v)}
+            >
+              {t.addService}
+            </button>
+            {catalog.length > 0 && (
+              <select
+                className="input max-w-xs"
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    addFromCatalog(e.target.value);
+                    e.target.value = "";
+                  }
+                }}
+              >
+                <option value="">{t.addFromCatalog}</option>
+                {catalog.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} · {money(c.basePriceCents, locale)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {showAdd && (
+            <div className="card space-y-3 border-dashed p-4">
+              <p className="text-sm font-medium">{t.freeFormService}</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  className="input"
+                  placeholder={t.name}
+                  value={draft.name}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, name: e.target.value }))
+                  }
+                />
+                <input
+                  className="input"
+                  placeholder={t.description}
+                  value={draft.description}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, description: e.target.value }))
+                  }
+                />
+                <input
+                  className="input"
+                  type="number"
+                  placeholder={t.duration}
+                  value={draft.durationMin}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      durationMin: Number(e.target.value),
+                    }))
+                  }
+                />
+                <input
+                  className="input"
+                  type="number"
+                  placeholder="$"
+                  value={draft.priceCents / 100}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      priceCents: Math.round(Number(e.target.value) * 100),
+                    }))
+                  }
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={draft.visible}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, visible: e.target.checked }))
+                  }
+                />
+                {t.visible}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={addFreeForm}
+                >
+                  {t.add}
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  onClick={() => {
+                    setShowAdd(false);
+                    setDraft(emptyDraft);
+                  }}
+                >
+                  {t.cancel}
+                </button>
+              </div>
+            </div>
+          )}
+
           {services.map((s) => (
             <div key={s.id} className="card grid gap-2 p-4 sm:grid-cols-2">
               <input
@@ -410,14 +619,26 @@ export default function ProPanelPage() {
                 />
                 {t.visible}
               </label>
-              <button
-                className="btn btn-ghost"
-                onClick={() => saveService(s)}
-              >
-                {t.save}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => saveService(s)}
+                >
+                  {t.save}
+                </button>
+                <button
+                  className="btn btn-ghost text-red-800"
+                  onClick={() => deleteService(s.id)}
+                >
+                  {t.delete}
+                </button>
+              </div>
             </div>
           ))}
+
+          {!services.length && !showAdd && (
+            <p className="text-[var(--taupe)]">{t.noProServices}</p>
+          )}
         </div>
       )}
     </div>
