@@ -62,26 +62,33 @@ export async function PATCH(req: Request) {
       .where(eq(schema.users.id, pro.userId));
   }
 
-  const [updated] = await db
-    .update(schema.professionals)
-    .set({
-      ...(body.name !== undefined ? { name: body.name } : {}),
-      ...(body.bio !== undefined ? { bio: body.bio } : {}),
-      ...(body.city !== undefined ? { city: body.city } : {}),
-      ...(body.address !== undefined ? { address: body.address } : {}),
-      ...(body.whatsapp !== undefined ? { whatsapp: body.whatsapp } : {}),
-      ...(body.instagram !== undefined ? { instagram: body.instagram } : {}),
-      ...(body.photoUrl !== undefined ? { photoUrl: body.photoUrl } : {}),
-      ...(body.hoursJson !== undefined ? { hoursJson: body.hoursJson } : {}),
-      ...(body.closedDaysJson !== undefined
-        ? { closedDaysJson: body.closedDaysJson }
-        : {}),
-      ...(body.categories !== undefined ? { categories: body.categories } : {}),
-      ...(body.status !== undefined ? { status: body.status } : {}),
-      ...(body.paidUntil !== undefined ? { paidUntil: body.paidUntil } : {}),
-    })
-    .where(eq(schema.professionals.id, body.id))
-    .returning();
+  const profilePatch: Record<string, unknown> = {
+    ...(body.name !== undefined ? { name: body.name } : {}),
+    ...(body.bio !== undefined ? { bio: body.bio } : {}),
+    ...(body.city !== undefined ? { city: body.city } : {}),
+    ...(body.address !== undefined ? { address: body.address } : {}),
+    ...(body.whatsapp !== undefined ? { whatsapp: body.whatsapp } : {}),
+    ...(body.instagram !== undefined ? { instagram: body.instagram } : {}),
+    ...(body.photoUrl !== undefined ? { photoUrl: body.photoUrl } : {}),
+    ...(body.hoursJson !== undefined ? { hoursJson: body.hoursJson } : {}),
+    ...(body.closedDaysJson !== undefined
+      ? { closedDaysJson: body.closedDaysJson }
+      : {}),
+    ...(body.categories !== undefined ? { categories: body.categories } : {}),
+    ...(body.status !== undefined ? { status: body.status } : {}),
+    ...(body.paidUntil !== undefined ? { paidUntil: body.paidUntil } : {}),
+  };
+
+  let updated = pro;
+  if (Object.keys(profilePatch).length > 0) {
+    const [row] = await db
+      .update(schema.professionals)
+      .set(profilePatch)
+      .where(eq(schema.professionals.id, body.id))
+      .returning();
+    if (row) updated = row;
+  }
+
   return NextResponse.json({
     professional: updated,
     passwordUpdated: body.password !== undefined,
