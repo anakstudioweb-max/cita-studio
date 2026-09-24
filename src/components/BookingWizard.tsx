@@ -92,10 +92,10 @@ export function BookingWizard() {
   useEffect(() => {
     fetch("/api/catalog")
       .then(async (r) => {
-        if (r.status === 503) setDbError(true);
-        return r.json();
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) setDbError(true);
+        setServices(d.services || []);
       })
-      .then((d) => setServices(d.services || []))
       .catch(() => setDbError(true));
   }, []);
 
@@ -183,6 +183,11 @@ export function BookingWizard() {
       {dbError && (
         <div className="card border-[var(--blush)]/40 p-4 text-sm text-[var(--taupe)]">
           {t.dbMissing}
+        </div>
+      )}
+      {!dbError && step === 1 && services.length === 0 && (
+        <div className="card border-[var(--line)] p-4 text-sm text-[var(--taupe)]">
+          {t.noServices}
         </div>
       )}
 

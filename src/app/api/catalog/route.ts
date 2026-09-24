@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { and, eq, gte, inArray, or, sql } from "drizzle-orm";
-import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
+import { and, eq, gte, inArray } from "drizzle-orm";
+import { getDb, hasDatabaseUrl, safeErrorDetail, schema } from "@/lib/db";
 import { todayHoustonDateStr } from "@/lib/utils";
 
 export async function GET() {
@@ -27,7 +27,13 @@ export async function GET() {
       );
 
     const proIds = publicPros.map((p) => p.id);
-    let offered: { name: string; priceCents: number; durationMin: number; professionalId: string; id: string }[] = [];
+    let offered: {
+      name: string;
+      priceCents: number;
+      durationMin: number;
+      professionalId: string;
+      id: string;
+    }[] = [];
     if (proIds.length) {
       const rows = await db
         .select()
@@ -70,9 +76,12 @@ export async function GET() {
     return NextResponse.json({ services: catalog });
   } catch (e) {
     console.error(e);
-    const msg = e instanceof Error ? e.message : "unknown";
     return NextResponse.json(
-      { error: "Failed to load catalog", detail: msg.slice(0, 160), services: [] },
+      {
+        error: "Failed to load catalog",
+        detail: safeErrorDetail(e),
+        services: [],
+      },
       { status: 500 }
     );
   }

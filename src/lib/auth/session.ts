@@ -34,10 +34,13 @@ export async function createSession(payload: SessionPayload) {
     .sign(secretKey());
 
   const jar = await cookies();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
+  const secure =
+    process.env.NODE_ENV === "production" || appUrl.startsWith("https://");
   jar.set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure,
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
   });

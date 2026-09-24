@@ -66,6 +66,8 @@ const en = {
   errorGeneric: "Something went wrong. Please try again.",
   dbMissing:
     "Bookings are temporarily unavailable. The marketplace needs a database connection.",
+  noServices:
+    "No services are available right now. Please try again in a moment.",
   googleOauthNote: "Google sign-in is not configured yet.",
   admin: "Admin",
   proPanel: "My studio",
@@ -161,6 +163,8 @@ const es: Dict = {
   errorGeneric: "Algo salió mal. Inténtalo de nuevo.",
   dbMissing:
     "Las reservas no están disponibles. El marketplace necesita una base de datos.",
+  noServices:
+    "No hay servicios disponibles ahora. Inténtalo de nuevo en un momento.",
   googleOauthNote: "El acceso con Google aún no está configurado.",
   admin: "Admin",
   proPanel: "Mi estudio",
@@ -249,6 +253,8 @@ const pt: Dict = {
   errorGeneric: "Algo deu errado. Tente novamente.",
   dbMissing:
     "Agendamentos indisponíveis. O marketplace precisa de um banco de dados.",
+  noServices:
+    "Nenhum serviço disponível agora. Tente novamente em instantes.",
   googleOauthNote: "Login com Google ainda não configurado.",
   admin: "Admin",
   proPanel: "Meu estúdio",
@@ -334,6 +340,8 @@ const fr: Dict = {
   errorGeneric: "Une erreur s’est produite. Réessayez.",
   dbMissing:
     "Réservations indisponibles. Le marketplace a besoin d’une base de données.",
+  noServices:
+    "Aucun service disponible pour le moment. Réessayez bientôt.",
   googleOauthNote: "La connexion Google n’est pas encore configurée.",
   admin: "Admin",
   proPanel: "Mon studio",

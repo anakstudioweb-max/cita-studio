@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { ZodError } from "zod";
-import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
+import { getDb, hasDatabaseUrl, safeErrorDetail, schema } from "@/lib/db";
 import { createSession, verifyPassword } from "@/lib/auth/session";
 import { loginSchema } from "@/lib/validation";
 
@@ -42,13 +42,21 @@ export async function POST(req: Request) {
   } catch (e) {
     console.error(e);
     if (e instanceof ZodError) {
-      return NextResponse.json({ error: "Invalid email or password format" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid email or password format" },
+        { status: 400 }
+      );
     }
-    const msg = e instanceof Error ? e.message : "Login failed";
-    // Surface safe config/db hints without leaking secrets
-    if (/SESSION_SECRET|DATABASE_URL|connect|ECONN|ssl|timeout/i.test(msg)) {
-      return NextResponse.json({ error: "Server configuration error", detail: msg.slice(0, 120) }, { status: 503 });
+    const detail = safeErrorDetail(e);
+    if (/SESSION_SECRET|DATABASE_URL|connect|ECONN|ssl|timeout|auth/i.test(detail)) {
+      return NextResponse.json(
+        { error: "Server configuration error", detail },
+        { status: 503 }
+      );
     }
-    return NextResponse.json({ error: "Login failed", detail: msg.slice(0, 120) }, { status: 500 });
+    return NextResponse.json(
+      { error: "Login failed", detail },
+      { status: 500 }
+    );
   }
 }
