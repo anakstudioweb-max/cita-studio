@@ -50,6 +50,7 @@ type Booking = {
   professionalName?: string;
   serviceName?: string;
   clientName: string;
+  clientPhone: string;
   startAt: string;
   priceCents: number;
   status: "requested" | "confirmed" | "done" | "cancelled";
@@ -106,6 +107,11 @@ export default function AdminPage() {
   const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>(
     {}
   );
+  const [emailDrafts, setEmailDrafts] = useState<Record<string, string>>({});
+  const [ownerEmail, setOwnerEmail] = useState("admin@anak.studio");
+  const [ownerPassword, setOwnerPassword] = useState("");
+  const [ownerEmailDraft, setOwnerEmailDraft] = useState("");
+  const [showOwnerAccount, setShowOwnerAccount] = useState(false);
 
   const [saving, setSaving] = useState(false);
 
@@ -139,10 +145,21 @@ export default function AdminPage() {
     );
     setPros(list);
     setDraftPros(Object.fromEntries(list.map((x) => [x.id, { ...x }])));
+    setEmailDrafts((prev) => {
+      const next = { ...prev };
+      for (const x of list) {
+        if (next[x.id] === undefined) next[x.id] = x.email || "";
+      }
+      return next;
+    });
     setCatalog(c.services || []);
     const q = filterPro ? `?professionalId=${filterPro}` : "";
     const b = await fetch(`/api/admin/bookings${q}`).then((r) => r.json());
     setBookings(b.bookings || []);
+    if (me.user?.email) {
+      setOwnerEmail(me.user.email);
+      setOwnerEmailDraft(me.user.email);
+    }
   }, [filterPro, router]);
 
   useEffect(() => {
@@ -313,6 +330,71 @@ export default function AdminPage() {
     setSaving(false);
   }
 
+  async function setProEmail(professionalId: string) {
+    const email = (emailDrafts[professionalId] || "").trim().toLowerCase();
+    if (!email) {
+      flash("Enter an email", "error");
+      return;
+    }
+    if (saving) return;
+    setSaving(true);
+    const res = await fetch("/api/admin/professionals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: professionalId, email }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      flash(err.error || t.errorGeneric, "error");
+      setSaving(false);
+      return;
+    }
+    flash("Email updated");
+    await load();
+    setSaving(false);
+  }
+
+  async function saveOwnerAccount(e: React.FormEvent) {
+    e.preventDefault();
+    if (saving) return;
+    const payload: { password?: string; email?: string } = {};
+    const pwd = ownerPassword.trim();
+    const em = ownerEmailDraft.trim().toLowerCase();
+    if (pwd) payload.password = pwd;
+    if (em && em !== ownerEmail) payload.email = em;
+    if (!payload.password && !payload.email) {
+      flash("Enter a new password or email", "error");
+      return;
+    }
+    setSaving(true);
+    const res = await fetch("/api/admin/account", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      flash(err.error || t.errorGeneric, "error");
+      setSaving(false);
+      return;
+    }
+    const data = await res.json().catch(() => ({}));
+    if (data.email) {
+      setOwnerEmail(data.email);
+      setOwnerEmailDraft(data.email);
+    }
+    setOwnerPassword("");
+    flash(
+      [
+        data.passwordUpdated ? "Password updated" : null,
+        data.emailUpdated ? "Email updated" : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || "Saved"
+    );
+    setSaving(false);
+  }
+
   async function saveProService(
     professionalId: string,
     svc: Partial<ProService> & {
@@ -431,17 +513,73 @@ export default function AdminPage() {
         <div>
           <p className="chip">{t.admin}</p>
           <h1 className="mt-2 heading-display text-3xl">Anak.Studio</h1>
+          <p className="mt-1 text-sm text-[var(--taupe)]">
+            Signed in as {ownerEmail}
+          </p>
         </div>
-        <button
-          className="btn btn-ghost"
-          onClick={async () => {
-            await fetch("/api/auth/logout", { method: "POST" });
-            router.push("/login");
-          }}
-        >
-          {t.logout}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="btn btn-ghost"
+            type="button"
+            onClick={() => setShowOwnerAccount((v) => !v)}
+          >
+            Owner account
+          </button>
+          <button
+            className="btn btn-ghost"
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST" });
+              router.push("/login");
+            }}
+          >
+            {t.logout}
+          </button>
+        </div>
       </div>
+
+      {showOwnerAccount && (
+        <form className="card space-y-3 p-3.5" onSubmit={saveOwnerAccount}>
+          <p className="heading-section text-lg">Owner account</p>
+          <p className="text-sm text-[var(--taupe)]">
+            Change the admin login email and/or password for this owner session.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm">
+              {t.email}
+              <input
+                className="input mt-1"
+                type="email"
+                value={ownerEmailDraft}
+                onChange={(e) => setOwnerEmailDraft(e.target.value)}
+              />
+            </label>
+            <label className="text-sm">
+              New password
+              <input
+                className="input mt-1"
+                type="password"
+                autoComplete="new-password"
+                placeholder="Leave blank to keep"
+                value={ownerPassword}
+                onChange={(e) => setOwnerPassword(e.target.value)}
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn btn-primary" type="submit" disabled={saving}>
+              {saving ? t.loading : t.save}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={saving}
+              onClick={() => setShowOwnerAccount(false)}
+            >
+              {t.cancel}
+            </button>
+          </div>
+        </form>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {(
@@ -629,7 +767,13 @@ export default function AdminPage() {
       {/* ——— Professionals ——— */}
       {tab === "pros" && (
         <div className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="heading-section text-2xl">Professionals</h2>
+              <p className="mt-1 text-sm text-[var(--taupe)]">
+                Login email & password for each artist
+              </p>
+            </div>
             <button
               className="btn"
               onClick={() => setShowCreatePro((v) => !v)}
@@ -1003,11 +1147,31 @@ export default function AdminPage() {
                         {saving ? t.loading : t.save}
                       </button>
 
-                      <div className="space-y-2 rounded-[12px] border border-[var(--line)] p-3">
-                        <p className="text-sm">
-                          <span className="text-[var(--taupe)]">{t.email}: </span>
-                          <span className="font-medium">{p.email || "—"}</span>
-                        </p>
+                      <div className="space-y-3 rounded-[12px] border border-[var(--line)] p-3">
+                        <p className="text-sm font-medium">Login credentials</p>
+                        <label className="text-sm block">
+                          {t.email} / username
+                          <input
+                            className="input mt-1"
+                            type="email"
+                            autoComplete="off"
+                            value={emailDrafts[p.id] ?? p.email ?? ""}
+                            onChange={(e) =>
+                              setEmailDrafts((prev) => ({
+                                ...prev,
+                                [p.id]: e.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={saving}
+                          onClick={() => setProEmail(p.id)}
+                        >
+                          Change email
+                        </button>
                         <label className="text-sm block">
                           Set password
                           <input
@@ -1279,13 +1443,18 @@ export default function AdminPage() {
               ))}
             </select>
           </label>
+          {bookings.length === 0 && (
+            <p className="empty-state">No appointments yet</p>
+          )}
           {bookings.map((b) => (
             <div key={b.id} className="card space-y-2 p-3.5">
               <div className="flex flex-wrap justify-between gap-2">
                 <div>
                   <p className="heading-section text-lg">{b.refCode}</p>
                   <p className="text-sm text-[var(--taupe)]">
-                    {b.professionalName} · {b.serviceName} · {b.clientName}
+                    {b.clientName}
+                    {b.clientPhone ? ` · ${b.clientPhone}` : ""} ·{" "}
+                    {b.professionalName} · {b.serviceName} · {b.status}
                   </p>
                   <p className="text-sm">
                     {new Date(b.startAt).toLocaleString("en-US", {

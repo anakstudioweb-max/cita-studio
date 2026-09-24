@@ -24,13 +24,14 @@ export async function POST(req: Request) {
     }
     const body = loginSchema.parse(await req.json());
     const raw = body.email.trim().toLowerCase();
-    // Aliases: admin → owner, user → demo pro (anakmezar20)
-    const email =
-      raw === "admin"
-        ? "admin@anak.studio"
-        : raw === "user" || raw === "user@anak.studio"
-          ? "anakmezar20@gmail.com"
-          : raw;
+    // Aliases: admin → admin@anak.studio; user → user@anak.studio only if that user exists
+    let email = raw;
+    if (raw === "admin") {
+      email = "admin@anak.studio";
+    } else if (raw === "user") {
+      email = "user@anak.studio";
+    }
+
     const db = getDb();
     const [user] = await db
       .select()

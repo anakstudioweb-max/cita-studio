@@ -11,7 +11,7 @@ export const bookSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  // Accept full email or short aliases: admin / user
+  // Accept full email or short aliases: admin → admin@anak.studio; user → user@anak.studio if present
   email: z.string().min(1).max(120),
   password: z.string().min(1).max(120),
 });

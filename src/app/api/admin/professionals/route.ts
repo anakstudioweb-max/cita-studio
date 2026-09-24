@@ -35,6 +35,8 @@ const adminPatch = profileSchema.extend({
   paidUntil: z.string().nullable().optional(),
   /** Optional password reset — bcrypt hashed, never returned to client. */
   password: z.string().min(1).max(120).optional(),
+  /** Optional login email change for the pro's user account. */
+  email: z.string().email().optional(),
 });
 
 export async function PATCH(req: Request) {
@@ -52,6 +54,34 @@ export async function PATCH(req: Request) {
     .limit(1);
   if (!pro) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  let emailUpdated = false;
+  if (body.email !== undefined) {
+    const email = body.email.trim().toLowerCase();
+    const [current] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, pro.userId))
+      .limit(1);
+    if (!current) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    if (email !== current.email) {
+      const clash = await db
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.email, email))
+        .limit(1);
+      if (clash.length) {
+        return NextResponse.json({ error: "Email already in use" }, { status: 409 });
+      }
+      await db
+        .update(schema.users)
+        .set({ email })
+        .where(eq(schema.users.id, pro.userId));
+      emailUpdated = true;
+    }
   }
 
   if (body.password !== undefined) {
@@ -89,9 +119,16 @@ export async function PATCH(req: Request) {
     if (row) updated = row;
   }
 
+  const [userRow] = await db
+    .select({ email: schema.users.email })
+    .from(schema.users)
+    .where(eq(schema.users.id, pro.userId))
+    .limit(1);
+
   return NextResponse.json({
-    professional: updated,
+    professional: { ...updated, email: userRow?.email || "" },
     passwordUpdated: body.password !== undefined,
+    emailUpdated,
   });
 }
 

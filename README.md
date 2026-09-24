@@ -52,14 +52,17 @@ npm run dev
 
 Open http://localhost:3000
 
-## Seed logins
+## Admin login (after reset)
 
-| Role | Email | Password |
+| Role | Email / alias | Password |
 |---|---|---|
-| Owner (admin) | ``admin` (or admin@anak.studio)` | `admin` |
-| Pro — Luna Vega (lashes, Montrose) | ``user` (or user@anak.studio)` | `user` |
-| Pro — Marisol Chen (brows, The Heights) | `marisol@anak.studio` | `MarisolAnak123!` |
-| Pro — Noa Ruiz (both, River Oaks) | `noa@anak.studio` | `NoaAnak123!` |
+| Owner | `admin` or `admin@anak.studio` | `admin` |
+
+Professionals are created from `/admin` → Professionals. Alias `user` only works if a `user@anak.studio` account exists (no hardcoded demo email).
+
+Change credentials in UI:
+- **Owner**: `/admin` → Owner account (email and/or password)
+- **Pro**: `/admin` → Professionals → expand artist → Change email / Set password
 
 ## Routes
 
@@ -86,7 +89,7 @@ A professional appears on the public site only if `status = active` **and** `pai
 
 ## Español (breve)
 
-Anak.Studio es un marketplace de pestañas y cejas en Houston. Clientes reservan sin cuenta; la profesional confirma por WhatsApp. Copia `.env.example` a `.env.local`, pon el `DATABASE_URL` del pooler de Supabase, ejecuta `npm run db:seed` y `npm run dev`. Panel pro: `/pro`. Admin: `/admin` con ``admin` (or admin@anak.studio)`.
+Anak.Studio es un marketplace de pestañas y cejas en Houston. Clientes reservan sin cuenta; la profesional confirma por WhatsApp. Copia `.env.example` a `.env.local`, pon el `DATABASE_URL` del pooler de Supabase, ejecuta `npm run db:seed` y `npm run dev`. Panel pro: `/pro`. Admin: `/admin` con `admin` / `admin@anak.studio` (password `admin`).
 
 ## Gaps / next
 
