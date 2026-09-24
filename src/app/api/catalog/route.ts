@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { and, eq, gte, inArray } from "drizzle-orm";
+import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
+import { todayHoustonDateStr } from "@/lib/utils";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-import { and, eq, gte, inArray } from "drizzle-orm";
-import { getDb, hasDatabaseUrl, safeErrorDetail, schema } from "@/lib/db";
-import { todayHoustonDateStr } from "@/lib/utils";
 
 export async function GET() {
   if (!hasDatabaseUrl()) {
@@ -17,7 +18,6 @@ export async function GET() {
     const today = todayHoustonDateStr();
     const services = await db.select().from(schema.catalogServices);
 
-    // Count visible pros per catalog service name among public pros
     const publicPros = await db
       .select()
       .from(schema.professionals)
@@ -55,7 +55,6 @@ export async function GET() {
       }));
     }
 
-    // Unique catalog-facing list from templates, with min price among public offers
     const catalog = services
       .filter((s) => s.category === "lashes" || s.category === "brows")
       .map((s) => {
@@ -76,16 +75,14 @@ export async function GET() {
       });
 
     return NextResponse.json({ services: catalog });
-    } catch (e) {
+  } catch (e) {
     console.error(e);
     const err = e as Error & { cause?: Error };
-    const msg = err.message || "unknown";
-    const cause = err.cause?.message || "";
     return NextResponse.json(
       {
         error: "Failed to load catalog",
-        detail: msg.slice(0, 160),
-        cause: cause.slice(0, 200),
+        detail: (err.message || "unknown").slice(0, 160),
+        cause: (err.cause?.message || "").slice(0, 200),
         services: [],
       },
       { status: 500 }

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 import { eq } from "drizzle-orm";
 import { ZodError } from "zod";
-import { getDb, hasDatabaseUrl, safeErrorDetail, schema } from "@/lib/db";
+import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
 import { createSession, verifyPassword } from "@/lib/auth/session";
 import { loginSchema } from "@/lib/validation";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
@@ -49,15 +50,21 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const detail = safeErrorDetail(e);
-    if (/SESSION_SECRET|DATABASE_URL|connect|ECONN|ssl|timeout|auth/i.test(detail)) {
+    const err = e as Error & { cause?: Error };
+    const msg = err.message || "Login failed";
+    const cause = err.cause?.message || "";
+    if (/SESSION_SECRET|DATABASE_URL|connect|ECONN|ssl|timeout/i.test(msg + cause)) {
       return NextResponse.json(
-        { error: "Server configuration error", detail },
+        {
+          error: "Server configuration error",
+          detail: msg.slice(0, 120),
+          cause: cause.slice(0, 160),
+        },
         { status: 503 }
       );
     }
     return NextResponse.json(
-      { error: "Login failed", detail },
+      { error: "Login failed", detail: msg.slice(0, 120), cause: cause.slice(0, 160) },
       { status: 500 }
     );
   }

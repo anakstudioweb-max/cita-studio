@@ -47,3 +47,4 @@ preview-shots/
 data/*.db
 data/*.db-*
 .env.local
+vercel-env-fill.txt

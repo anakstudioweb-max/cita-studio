@@ -7,10 +7,9 @@ let _db: ReturnType<typeof drizzle<typeof schema>> | null = null;
 
 function normalizeDatabaseUrl(raw: string) {
   let url = raw.trim().replace(/^["']|["']$/g, "");
-  const join = url.includes("?") ? "&" : "?";
-  if (!/[?&]sslmode=/.test(url)) url += `${join}sslmode=require`;
-  // Transaction pooler (6543) + drizzle: disable prepared stmts via prepare:false;
-  // pgbouncer=true helps some drivers advertise correctly.
+  if (!/[?&]sslmode=/.test(url)) {
+    url += url.includes("?") ? "&sslmode=require" : "?sslmode=require";
+  }
   if (url.includes("pooler.supabase.com") && !/[?&]pgbouncer=/.test(url)) {
     url += url.includes("?") ? "&pgbouncer=true" : "?pgbouncer=true";
   }
@@ -31,7 +30,6 @@ export function getDb() {
       prepare: false,
       idle_timeout: 20,
       connect_timeout: 15,
-      // Let sslmode=require in the URL drive TLS (avoids double-SSL quirks on Vercel)
     });
     _db = drizzle(_client, { schema });
   }
