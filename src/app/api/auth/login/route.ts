@@ -23,11 +23,18 @@ export async function POST(req: Request) {
       );
     }
     const body = loginSchema.parse(await req.json());
+    const raw = body.email.trim().toLowerCase();
+    const email =
+      raw === "admin"
+        ? "admin@anak.studio"
+        : raw === "user"
+          ? "user@anak.studio"
+          : raw;
     const db = getDb();
     const [user] = await db
       .select()
       .from(schema.users)
-      .where(eq(schema.users.email, body.email.toLowerCase()))
+      .where(eq(schema.users.email, email))
       .limit(1);
     if (!user || !(await verifyPassword(body.password, user.passwordHash))) {
       return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });

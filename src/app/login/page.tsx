@@ -42,10 +42,10 @@ export default function LoginPage() {
       <p className="text-sm text-[var(--taupe)]">{t.sub}</p>
       <form onSubmit={onSubmit} className="card space-y-4 p-6">
         <label className="block text-sm">
-          {t.email}
+          {t.email} <span className="text-taupe font-normal">(admin or user)</span>
           <input
             className="input mt-1"
-            type="email"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required

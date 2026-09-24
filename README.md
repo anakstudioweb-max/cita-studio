@@ -56,8 +56,8 @@ Open http://localhost:3000
 
 | Role | Email | Password |
 |---|---|---|
-| Owner (admin) | `owner@anak.studio` | `AnakOwner123!` |
-| Pro — Luna Vega (lashes, Montrose) | `luna@anak.studio` | `LunaAnak123!` |
+| Owner (admin) | ``admin` (or admin@anak.studio)` | `admin` |
+| Pro — Luna Vega (lashes, Montrose) | ``user` (or user@anak.studio)` | `user` |
 | Pro — Marisol Chen (brows, The Heights) | `marisol@anak.studio` | `MarisolAnak123!` |
 | Pro — Noa Ruiz (both, River Oaks) | `noa@anak.studio` | `NoaAnak123!` |
 
@@ -86,7 +86,7 @@ A professional appears on the public site only if `status = active` **and** `pai
 
 ## Español (breve)
 
-Anak.Studio es un marketplace de pestañas y cejas en Houston. Clientes reservan sin cuenta; la profesional confirma por WhatsApp. Copia `.env.example` a `.env.local`, pon el `DATABASE_URL` del pooler de Supabase, ejecuta `npm run db:seed` y `npm run dev`. Panel pro: `/pro`. Admin: `/admin` con `owner@anak.studio`.
+Anak.Studio es un marketplace de pestañas y cejas en Houston. Clientes reservan sin cuenta; la profesional confirma por WhatsApp. Copia `.env.example` a `.env.local`, pon el `DATABASE_URL` del pooler de Supabase, ejecuta `npm run db:seed` y `npm run dev`. Panel pro: `/pro`. Admin: `/admin` con ``admin` (or admin@anak.studio)`.
 
 ## Gaps / next
 

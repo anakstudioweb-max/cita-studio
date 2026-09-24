@@ -11,8 +11,9 @@ export const bookSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
+  // Accept full email or short aliases: admin / user
+  email: z.string().min(1).max(120),
+  password: z.string().min(1).max(120),
 });
 
 export const signupSchema = z.object({
