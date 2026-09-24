@@ -151,18 +151,33 @@ export async function POST(req: Request) {
       let emailStatus: "sent" | "skipped" | "failed" = "skipped";
       let smsStatus: "sent" | "skipped" | "failed" = "skipped";
       let clientEmailSent = false;
+      let clientEmailStatus: "sent" | "skipped" | "failed" = "skipped";
       let clientSmsSent = false;
 
       try {
         const emailResult = await sendBookingEmails(notifyPayload);
         emailStatus = emailResult.status;
         clientEmailSent = emailResult.clientSent;
+        clientEmailStatus = emailResult.clientStatus;
+        if (
+          clientEmail &&
+          clientEmail.includes("@") &&
+          clientEmailStatus === "failed"
+        ) {
+          console.error("Client confirmation email failed", {
+            ref: booking.refCode,
+            clientStatus: clientEmailStatus,
+          });
+        }
       } catch (err) {
         console.error(
           "sendBookingEmails threw",
           err instanceof Error ? err.message : "unknown"
         );
         emailStatus = "failed";
+        if (clientEmail && clientEmail.includes("@")) {
+          clientEmailStatus = "failed";
+        }
       }
 
       // Telnyx outbound SMS is disabled — always skipped (copy-paste in emails).
@@ -198,6 +213,7 @@ export async function POST(req: Request) {
           email: emailStatus,
           sms: smsStatus,
           clientEmailSent,
+          clientEmail: clientEmailStatus,
           clientSmsSent,
         },
       });

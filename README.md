@@ -109,10 +109,32 @@ Anak.Studio es un marketplace de pestañas y cejas en Houston. Clientes reservan
 
 On successful `POST /api/book`, the API optionally sends:
 
-- **SMS** (Telnyx) to the professional (`professionals.whatsapp`) and the client (`clientPhone`, required).
 - **Email** (Resend) to the professional (login email), the owner (`OWNER_NOTIFY_EMAIL`), and the client if `clientEmail` was provided.
+- **SMS**: Telnyx outbound is **disabled** (no 10DLC). Pro/owner emails include a copy-paste SMS/WhatsApp block for staff to text the client manually.
 
-If keys are missing, booking still succeeds and the JSON includes `notifications: { email, sms }` as `sent` | `skipped` | `failed`. WhatsApp confirm link is unchanged.
+If keys are missing, booking still succeeds. JSON includes:
+
+```json
+"notifications": {
+  "email": "sent|skipped|failed",
+  "sms": "skipped",
+  "clientEmailSent": false,
+  "clientEmail": "sent|skipped|failed",
+  "clientSmsSent": false
+}
+```
+
+`clientEmail` is `skipped` when the client left email blank, `sent` when Resend accepted it, or `failed` when Resend rejected it (UI shows a short notice).
+
+### Resend domain (required for real client inboxes)
+
+`RESEND_FROM="Anak.Studio <onboarding@resend.dev>"` is the **sandbox** sender. Until you verify a custom domain in [Resend Domains](https://resend.com/domains) and set `RESEND_FROM` to an address on that domain (e.g. `Anak.Studio <bookings@anak.studio>`), Resend **only delivers to the Resend account email**. Typical symptom: owner (`OWNER_NOTIFY_EMAIL`) gets booking mail, but the client at another Gmail/Yahoo address never does — code still attempts the client send and logs `sandboxLikely: true`.
+
+Production checklist:
+
+1. Verify `anak.studio` (or another domain) in Resend.
+2. Set Vercel env `RESEND_FROM` to a verified-domain From address.
+3. Redeploy. Confirm a test booking to a non-account inbox.
 
 ```
 RESEND_API_KEY=
@@ -130,4 +152,4 @@ Do not commit secrets. Set these in Vercel → Project → Settings → Environm
 - Supabase RLS not enforced (app uses server-side DB + JWT cookies)
 - Photo upload (URL field only; SVG placeholders in `/public/avatars`)
 - Card billing (owner marks `paid_until` manually)
-- Verify Resend domain + Telnyx number for production notifications
+- Verify Resend domain for production client emails (see above)

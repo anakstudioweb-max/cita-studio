@@ -45,6 +45,8 @@ type Confirmation = {
     email: "sent" | "skipped" | "failed";
     sms: "sent" | "skipped" | "failed";
     clientEmailSent?: boolean;
+    /** Per-client confirmation outcome (skipped if no email provided). */
+    clientEmail?: "sent" | "skipped" | "failed";
     clientSmsSent?: boolean;
   };
 };
@@ -569,7 +571,8 @@ export function BookingWizard() {
             <Row label={t.price} value={money(confirm.priceCents, locale)} />
           </div>
           {(confirm.notifications?.clientSmsSent ||
-            confirm.notifications?.clientEmailSent) && (
+            confirm.notifications?.clientEmailSent ||
+            confirm.notifications?.clientEmail === "failed") && (
             <div className="space-y-1 text-sm text-[var(--taupe)]">
               {confirm.notifications?.clientSmsSent && (
                 <p>{t.notifySmsSent}</p>
@@ -577,6 +580,10 @@ export function BookingWizard() {
               {confirm.notifications?.clientEmailSent && (
                 <p>{t.notifyEmailSent}</p>
               )}
+              {!confirm.notifications?.clientEmailSent &&
+                confirm.notifications?.clientEmail === "failed" && (
+                  <p>{t.notifyEmailFailed}</p>
+                )}
             </div>
           )}
           {confirm.whatsappUrl ? (

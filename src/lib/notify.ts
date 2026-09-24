@@ -257,16 +257,43 @@ export function toE164(phone: string): string | null {
   return null;
 }
 
+function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at < 1) return "(invalid)";
+  return `${email[0]}***${email.slice(at)}`;
+}
+
+function isResendSandboxFrom(from: string): boolean {
+  return /onboarding@resend\.dev/i.test(from);
+}
+
+function looksLikeResendSandboxRestriction(status: number, detail: string): boolean {
+  const d = detail.toLowerCase();
+  return (
+    status === 403 ||
+    status === 422 ||
+    d.includes("only send testing emails") ||
+    d.includes("verify a domain") ||
+    d.includes("you can only send") ||
+    d.includes("testing emails to your own email") ||
+    d.includes("domain is not verified")
+  );
+}
+
 async function sendResendEmail(opts: {
   to: string;
   subject: string;
   html: string;
   text: string;
+  role?: EmailRole;
 }): Promise<NotifyStatus> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const from = process.env.RESEND_FROM?.trim();
   if (!apiKey || !from) return "skipped";
   if (!opts.to?.includes("@")) return "skipped";
+
+  const role = opts.role ?? "client";
+  const toMasked = maskEmail(opts.to);
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -285,16 +312,33 @@ async function sendResendEmail(opts: {
     });
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
+      const sandbox =
+        isResendSandboxFrom(from) ||
+        looksLikeResendSandboxRestriction(res.status, detail);
       console.error(
         "Resend email failed",
-        res.status,
-        detail.slice(0, 200)
+        {
+          role,
+          to: toMasked,
+          from,
+          status: res.status,
+          sandboxLikely: sandbox,
+          detail: detail.slice(0, 300),
+          hint: sandbox
+            ? "RESEND_FROM is still onboarding@resend.dev (or domain unverified). Resend only delivers to the account email until you verify a custom domain."
+            : undefined,
+        }
       );
       return "failed";
     }
+    console.info("Resend email sent", { role, to: toMasked });
     return "sent";
   } catch (err) {
-    console.error("Resend email error", err instanceof Error ? err.message : "unknown");
+    console.error("Resend email error", {
+      role,
+      to: toMasked,
+      message: err instanceof Error ? err.message : "unknown",
+    });
     return "failed";
   }
 }
@@ -312,23 +356,41 @@ function resolveOwnerEmail(p: BookingNotifyPayload): string | null {
   return "admin@anak.studio";
 }
 
+export type BookingEmailResult = {
+  status: NotifyStatus;
+  /** True only when Resend accepted the client message. */
+  clientSent: boolean;
+  /** Per-recipient outcome for the optional client confirmation. */
+  clientStatus: NotifyStatus;
+};
+
 /**
  * Email professional, owner, and client (if email provided).
  * HTML + plain text via Resend. No-ops cleanly when Resend env is unset.
  * Pro/owner emails include a copy-paste SMS/WhatsApp block for the client.
+ *
+ * Note: with RESEND_FROM=onboarding@resend.dev (unverified domain), Resend
+ * only delivers to the Resend account email. Owner may succeed while client
+ * fails — check logs for sandboxLikely and verify a custom domain in Resend.
  */
 export async function sendBookingEmails(
   p: BookingNotifyPayload
-): Promise<{ status: NotifyStatus; clientSent: boolean }> {
+): Promise<BookingEmailResult> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const from = process.env.RESEND_FROM?.trim();
   if (!apiKey || !from) {
-    return { status: "skipped", clientSent: false };
+    return { status: "skipped", clientSent: false, clientStatus: "skipped" };
+  }
+
+  if (isResendSandboxFrom(from)) {
+    console.warn(
+      "Resend sandbox FROM detected (onboarding@resend.dev). Client confirmation emails to other inboxes will fail until you verify a domain and set RESEND_FROM to that domain."
+    );
   }
 
   const templates = await loadTemplates();
   const results: NotifyStatus[] = [];
-  let clientSent = false;
+  let clientStatus: NotifyStatus = "skipped";
 
   if (p.professionalEmail?.includes("@")) {
     const mail = buildBookingEmailFromTemplates(p, "professional", templates);
@@ -338,6 +400,7 @@ export async function sendBookingEmails(
         subject: mail.subject,
         html: mail.html,
         text: mail.text,
+        role: "professional",
       })
     );
   }
@@ -351,6 +414,7 @@ export async function sendBookingEmails(
         subject: mail.subject,
         html: mail.html,
         text: mail.text,
+        role: "owner",
       })
     );
   }
@@ -358,18 +422,24 @@ export async function sendBookingEmails(
   const clientEmail = p.clientEmail?.trim();
   if (clientEmail?.includes("@")) {
     const mail = buildBookingEmailFromTemplates(p, "client", templates);
-    const st = await sendResendEmail({
+    clientStatus = await sendResendEmail({
       to: clientEmail,
       subject: mail.subject,
       html: mail.html,
       text: mail.text,
+      role: "client",
     });
-    results.push(st);
-    clientSent = st === "sent";
+    results.push(clientStatus);
   }
 
-  if (!results.length) return { status: "skipped", clientSent: false };
-  return { status: aggregate(results), clientSent };
+  if (!results.length) {
+    return { status: "skipped", clientSent: false, clientStatus: "skipped" };
+  }
+  return {
+    status: aggregate(results),
+    clientSent: clientStatus === "sent",
+    clientStatus,
+  };
 }
 
 /**
