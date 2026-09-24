@@ -15,6 +15,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://bookanakstudio.com"),
   title: {
     default: "Anak.Studio — Houston lashes & brows",
     template: "%s · Anak.Studio",
@@ -22,6 +23,24 @@ export const metadata: Metadata = {
   description:
     "Pick the service. Then who does it. Houston lashes and brows marketplace — no account, confirm on WhatsApp.",
   applicationName: "Anak.Studio",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "https://bookanakstudio.com",
+    siteName: "Anak.Studio",
+    title: "Anak.Studio — Houston lashes & brows",
+    description:
+      "Pick the service. Then who does it. Houston lashes and brows marketplace — no account, confirm on WhatsApp.",
+  },
+  twitter: {
+    card: "summary",
+    title: "Anak.Studio — Houston lashes & brows",
+    description:
+      "Pick the service. Then who does it. Houston lashes and brows marketplace — no account, confirm on WhatsApp.",
+  },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

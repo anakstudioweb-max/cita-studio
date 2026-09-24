@@ -39,8 +39,15 @@ export default function PrivacyPage() {
       <section className="space-y-3">
         <h2 className="heading-section text-xl">1. Who we are</h2>
         <p className="text-[var(--taupe)] leading-relaxed">
-          Anak.Studio is operated by Ana Meza in Houston, Texas. Questions about
-          privacy or this Policy may be sent to{" "}
+          Anak.Studio is operated by Ana Meza in Houston, Texas. The public site
+          is{" "}
+          <a
+            className="font-medium text-[var(--blush)] underline underline-offset-4"
+            href="https://bookanakstudio.com"
+          >
+            bookanakstudio.com
+          </a>
+          . Questions about privacy or this Policy may be sent to{" "}
           <a
             className="font-medium text-[var(--blush)] underline underline-offset-4"
             href="mailto:anak.studioweb@gmail.com"
@@ -237,6 +244,14 @@ export default function PrivacyPage() {
           Anak.Studio
           <br />
           Houston, Texas, USA
+          <br />
+          Website:{" "}
+          <a
+            className="font-medium text-[var(--blush)] underline underline-offset-4"
+            href="https://bookanakstudio.com"
+          >
+            bookanakstudio.com
+          </a>
           <br />
           Email:{" "}
           <a

@@ -4,6 +4,8 @@ Quiet-luxury Houston marketplace for lashes & brows. Clients book without an acc
 
 **Brand:** Anak.Studio · booking refs `ANA-XXXX` · English UI by default (auto EN / ES / PT / FR).
 
+**Live site:** [https://bookanakstudio.com](https://bookanakstudio.com) (canonical). Legacy `*.vercel.app` is not the public URL.
+
 ## Stack
 
 - Next.js App Router + TypeScript + Tailwind
@@ -19,13 +21,13 @@ Copy `.env.example` → `.env.local`:
 |---|---|---|
 | `DATABASE_URL` | **Yes** | Supabase **pooler** URL (port `6543`, user `postgres.PROJECT_REF`) recommended. Direct `db.*.supabase.co:5432` may be IPv6-only. |
 | `SESSION_SECRET` | **Yes** | ≥32 random chars for JWT cookies |
-| `NEXT_PUBLIC_APP_URL` | Yes | e.g. `http://localhost:3000` or production URL |
+| `NEXT_PUBLIC_APP_URL` | Yes | Local `http://localhost:3000`; production `https://bookanakstudio.com` |
 | `NEXT_PUBLIC_SUPABASE_URL` | Optional | Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional | Not used yet (placeholder for Storage/Auth) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Optional | Not used yet |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Optional | Google login button stays disabled until set |
 | `RESEND_API_KEY` | Optional | Resend API key for booking emails |
-| `RESEND_FROM` | Optional* | e.g. `Anak.Studio <onboarding@resend.dev>` (*required with Resend key; replace after domain verify) |
+| `RESEND_FROM` | Optional* | Sandbox `Anak.Studio <onboarding@resend.dev>`; after verify `Anak.Studio <bookings@bookanakstudio.com>` |
 | `TELNYX_API_KEY` | Optional | Telnyx API key for booking SMS |
 | `TELNYX_FROM_NUMBER` | Optional* | E.164 sender (*required with Telnyx key) |
 | `OWNER_NOTIFY_EMAIL` | Optional | Inbox copied on every booking (fallback `admin@anak.studio` / first owner) |
@@ -97,9 +99,10 @@ A professional appears on the public site only if `status = active` **and** `pai
 ## Vercel
 
 1. Set `DATABASE_URL` to the Supabase **pooler** URL (`sslmode=require`).
-2. Set `SESSION_SECRET` and `NEXT_PUBLIC_APP_URL`.
-3. Deploy. No local SQLite — serverless needs Postgres.
-4. Re-run seed once against production DB if empty (`npm run db:seed` with prod `DATABASE_URL`).
+2. Set `SESSION_SECRET` and `NEXT_PUBLIC_APP_URL=https://bookanakstudio.com`.
+3. Attach custom domain **bookanakstudio.com** in Vercel (canonical). Optional: redirect `cita-studio.vercel.app` → custom domain in Vercel Domains.
+4. Deploy. No local SQLite — serverless needs Postgres.
+5. Re-run seed once against production DB if empty (`npm run db:seed` with prod `DATABASE_URL`).
 
 ## Español (breve)
 
@@ -128,17 +131,18 @@ If keys are missing, booking still succeeds. JSON includes:
 
 ### Resend domain (required for real client inboxes)
 
-`RESEND_FROM="Anak.Studio <onboarding@resend.dev>"` is the **sandbox** sender. Until you verify a custom domain in [Resend Domains](https://resend.com/domains) and set `RESEND_FROM` to an address on that domain (e.g. `Anak.Studio <bookings@anak.studio>`), Resend **only delivers to the Resend account email**. Typical symptom: owner (`OWNER_NOTIFY_EMAIL`) gets booking mail, but the client at another Gmail/Yahoo address never does — code still attempts the client send and logs `sandboxLikely: true`.
+`RESEND_FROM="Anak.Studio <onboarding@resend.dev>"` is the **sandbox** sender. Until you verify **bookanakstudio.com** in [Resend Domains](https://resend.com/domains) and set `RESEND_FROM` to `Anak.Studio <bookings@bookanakstudio.com>`, Resend **only delivers to the Resend account email**. Typical symptom: owner (`OWNER_NOTIFY_EMAIL`) gets booking mail, but the client at another Gmail/Yahoo address never does — code still attempts the client send and logs `sandboxLikely: true`.
 
 Production checklist:
 
-1. Verify `anak.studio` (or another domain) in Resend.
-2. Set Vercel env `RESEND_FROM` to a verified-domain From address.
-3. Redeploy. Confirm a test booking to a non-account inbox.
+1. Add **bookanakstudio.com** in Resend and publish the DNS records Resend shows (typically SPF/TXT, DKIM CNAMEs, and optionally MX for inbound).
+2. Set Vercel env `RESEND_FROM="Anak.Studio <bookings@bookanakstudio.com>"` after the domain shows verified.
+3. Set `NEXT_PUBLIC_APP_URL=https://bookanakstudio.com`.
+4. Redeploy. Confirm a test booking to a non-account inbox.
 
 ```
 RESEND_API_KEY=
-RESEND_FROM="Anak.Studio <onboarding@resend.dev>"  # replace after domain verify
+RESEND_FROM="Anak.Studio <bookings@bookanakstudio.com>"  # after bookanakstudio.com is verified in Resend
 TELNYX_API_KEY=
 TELNYX_FROM_NUMBER=+1...
 OWNER_NOTIFY_EMAIL=

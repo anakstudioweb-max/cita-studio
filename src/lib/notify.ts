@@ -209,6 +209,7 @@ export function buildBookingEmailFromTemplates(
             <td style="padding:24px 32px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
               <div style="border-top:1px solid #e8e8ed;padding-top:20px;">
                 <p style="margin:0;font-size:12px;line-height:1.5;color:#6e6e73;">Anak.Studio · Houston lashes &amp; brows</p>
+                <p style="margin:6px 0 0;font-size:12px;line-height:1.5;color:#6e6e73;"><a href="https://bookanakstudio.com" style="color:#6e6e73;text-decoration:underline;">bookanakstudio.com</a></p>
                 <p style="margin:6px 0 0;font-size:12px;line-height:1.5;color:#6e6e73;">${escapeHtml(footerNote)}</p>
               </div>
             </td>
@@ -224,7 +225,7 @@ export function buildBookingEmailFromTemplates(
   const copyPlain = includeCopyPaste
     ? copyPasteSectionPlain(p, templates)
     : "";
-  const text = `${headline}\n\n${introPlain}\n\n${plainTextBody(p, role)}${copyPlain}\n\nAnak.Studio · Houston lashes & brows\n${footerNote}`;
+  const text = `${headline}\n\n${introPlain}\n\n${plainTextBody(p, role)}${copyPlain}\n\nAnak.Studio · Houston lashes & brows\nhttps://bookanakstudio.com\n${footerNote}`;
 
   return { subject, html, text };
 }

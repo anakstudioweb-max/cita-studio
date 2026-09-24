@@ -9,8 +9,8 @@ export default function ContactPage() {
       </p>
       <p>
         Email{" "}
-        <a className="font-medium text-[var(--blush)] underline underline-offset-4" href="mailto:hello@anak.studio">
-          hello@anak.studio
+        <a className="font-medium text-[var(--blush)] underline underline-offset-4" href="mailto:hello@bookanakstudio.com">
+          hello@bookanakstudio.com
         </a>
       </p>
       <p className="text-sm text-[var(--muted)]">Houston, Texas</p>

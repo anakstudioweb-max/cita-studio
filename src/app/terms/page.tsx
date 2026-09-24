@@ -221,6 +221,14 @@ export default function TermsPage() {
           <br />
           Houston, Texas, USA
           <br />
+          Website:{" "}
+          <a
+            className="font-medium text-[var(--blush)] underline underline-offset-4"
+            href="https://bookanakstudio.com"
+          >
+            bookanakstudio.com
+          </a>
+          <br />
           Email:{" "}
           <a
             className="font-medium text-[var(--blush)] underline underline-offset-4"
