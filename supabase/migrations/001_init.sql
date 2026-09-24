@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   professional_service_id uuid NOT NULL REFERENCES professional_services(id) ON DELETE RESTRICT,
   client_name text NOT NULL,
   client_phone text NOT NULL,
+  client_email text NOT NULL DEFAULT '',
   notes text NOT NULL DEFAULT '',
   start_at timestamptz NOT NULL,
   end_at timestamptz NOT NULL,

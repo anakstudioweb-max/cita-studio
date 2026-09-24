@@ -40,6 +40,12 @@ type Confirmation = {
   serviceName: string;
   whatsappUrl: string | null;
   message: string;
+  notifications?: {
+    email: "sent" | "skipped" | "failed";
+    sms: "sent" | "skipped" | "failed";
+    clientEmailSent?: boolean;
+    clientSmsSent?: boolean;
+  };
 };
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -84,6 +90,7 @@ export function BookingWizard() {
   const [time, setTime] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,6 +154,7 @@ export function BookingWizard() {
           time,
           clientName: name,
           clientPhone: phone,
+          clientEmail: email.trim() || undefined,
           notes,
         }),
       });
@@ -155,7 +163,10 @@ export function BookingWizard() {
         setError(data.error || t.errorGeneric);
         return;
       }
-      setConfirm(data.booking);
+      setConfirm({
+        ...data.booking,
+        notifications: data.notifications,
+      });
       setStep(5);
       toast("Booking confirmed");
     } catch {
@@ -448,6 +459,19 @@ export function BookingWizard() {
               onChange={(e) => setPhone(e.target.value)}
               autoComplete="tel"
               inputMode="tel"
+              required
+              minLength={7}
+            />
+          </label>
+          <label className="block text-sm">
+            {t.emailOptional}
+            <input
+              className="input mt-1"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              inputMode="email"
             />
           </label>
           <label className="block text-sm">
@@ -480,15 +504,31 @@ export function BookingWizard() {
             <Row label={t.place} value={confirm.place} />
             <Row label={t.price} value={money(confirm.priceCents, locale)} />
           </div>
+          {(confirm.notifications?.clientSmsSent ||
+            confirm.notifications?.clientEmailSent) && (
+            <div className="space-y-1 text-sm text-[var(--taupe)]">
+              {confirm.notifications?.clientSmsSent && (
+                <p>{t.notifySmsSent}</p>
+              )}
+              {confirm.notifications?.clientEmailSent && (
+                <p>{t.notifyEmailSent}</p>
+              )}
+            </div>
+          )}
           {confirm.whatsappUrl ? (
-            <a
-              className="btn btn-primary w-full"
-              href={confirm.whatsappUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {t.whatsappBtn}
-            </a>
+            <div className="space-y-2">
+              <p className="text-center text-xs text-[var(--muted)]">
+                {t.notifyWhatsAppHint}
+              </p>
+              <a
+                className="btn btn-primary w-full"
+                href={confirm.whatsappUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t.whatsappBtn}
+              </a>
+            </div>
           ) : (
             <button
               className="btn btn-primary w-full"

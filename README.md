@@ -24,6 +24,11 @@ Copy `.env.example` → `.env.local`:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional | Not used yet (placeholder for Storage/Auth) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Optional | Not used yet |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Optional | Google login button stays disabled until set |
+| `RESEND_API_KEY` | Optional | Resend API key for booking emails |
+| `RESEND_FROM` | Optional* | e.g. `Anak.Studio <onboarding@resend.dev>` (*required with Resend key; replace after domain verify) |
+| `TELNYX_API_KEY` | Optional | Telnyx API key for booking SMS |
+| `TELNYX_FROM_NUMBER` | Optional* | E.164 sender (*required with Telnyx key) |
+| `OWNER_NOTIFY_EMAIL` | Optional | Inbox copied on every booking (fallback `admin@anak.studio` / first owner) |
 
 Without `DATABASE_URL`, booking APIs return a clear **503** config error (needed for Vercel if env is missing).
 
@@ -91,9 +96,29 @@ A professional appears on the public site only if `status = active` **and** `pai
 
 Anak.Studio es un marketplace de pestañas y cejas en Houston. Clientes reservan sin cuenta; la profesional confirma por WhatsApp. Copia `.env.example` a `.env.local`, pon el `DATABASE_URL` del pooler de Supabase, ejecuta `npm run db:seed` y `npm run dev`. Panel pro: `/pro`. Admin: `/admin` con `admin` / `admin@anak.studio` (password `admin`).
 
+## Booking notifications (Resend + Telnyx)
+
+On successful `POST /api/book`, the API optionally sends:
+
+- **SMS** (Telnyx) to the professional (`professionals.whatsapp`) and the client (`clientPhone`, required).
+- **Email** (Resend) to the professional (login email), the owner (`OWNER_NOTIFY_EMAIL`), and the client if `clientEmail` was provided.
+
+If keys are missing, booking still succeeds and the JSON includes `notifications: { email, sms }` as `sent` | `skipped` | `failed`. WhatsApp confirm link is unchanged.
+
+```
+RESEND_API_KEY=
+RESEND_FROM="Anak.Studio <onboarding@resend.dev>"  # replace after domain verify
+TELNYX_API_KEY=
+TELNYX_FROM_NUMBER=+1...
+OWNER_NOTIFY_EMAIL=
+```
+
+Do not commit secrets. Set these in Vercel → Project → Settings → Environment Variables.
+
 ## Gaps / next
 
 - Google OAuth stub only (button disabled)
 - Supabase RLS not enforced (app uses server-side DB + JWT cookies)
 - Photo upload (URL field only; SVG placeholders in `/public/avatars`)
 - Card billing (owner marks `paid_until` manually)
+- Verify Resend domain + Telnyx number for production notifications

@@ -117,6 +117,7 @@ export const bookings = pgTable(
       .references(() => professionalServices.id, { onDelete: "restrict" }),
     clientName: text("client_name").notNull(),
     clientPhone: text("client_phone").notNull(),
+    clientEmail: text("client_email").notNull().default(""),
     notes: text("notes").notNull().default(""),
     startAt: timestamp("start_at", { withTimezone: true }).notNull(),
     endAt: timestamp("end_at", { withTimezone: true }).notNull(),

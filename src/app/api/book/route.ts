@@ -10,6 +10,7 @@ import {
   isProPubliclyVisible,
   whatsappLink,
 } from "@/lib/utils";
+import { sendBookingEmails, sendBookingSms } from "@/lib/notify";
 
 export async function POST(req: Request) {
   if (!hasDatabaseUrl()) {
@@ -57,7 +58,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Slot is in the past" }, { status: 400 });
     }
 
-    // Overlap check before insert
     const overlaps = await db
       .select()
       .from(schema.bookings)
@@ -84,6 +84,8 @@ export async function POST(req: Request) {
       refCode = genRefCode();
     }
 
+    const clientEmail = body.clientEmail || "";
+
     try {
       const [booking] = await db
         .insert(schema.bookings)
@@ -93,6 +95,7 @@ export async function POST(req: Request) {
           professionalServiceId: svc.id,
           clientName: body.clientName.trim(),
           clientPhone: body.clientPhone.trim(),
+          clientEmail,
           notes: body.notes || "",
           startAt,
           endAt,
@@ -114,6 +117,63 @@ export async function POST(req: Request) {
 
       const wa = whatsappLink(pro.whatsapp, msg);
 
+      // Resolve pro login email + first owner for notifications
+      const [proUser] = await db
+        .select({ email: schema.users.email })
+        .from(schema.users)
+        .where(eq(schema.users.id, pro.userId))
+        .limit(1);
+      const [ownerUser] = await db
+        .select({ email: schema.users.email })
+        .from(schema.users)
+        .where(eq(schema.users.role, "owner"))
+        .limit(1);
+
+      const notifyPayload = {
+        refCode: booking.refCode,
+        serviceName: svc.name,
+        whenLabel: when,
+        place: pro.address || `${pro.city}`,
+        priceCents: booking.priceCents,
+        clientName: booking.clientName,
+        clientPhone: booking.clientPhone,
+        clientEmail: clientEmail || undefined,
+        professionalName: pro.name,
+        professionalEmail: proUser?.email ?? null,
+        professionalPhone: pro.whatsapp || null,
+        ownerEmail: ownerUser?.email ?? null,
+        notes: booking.notes || undefined,
+      };
+
+      let emailStatus: "sent" | "skipped" | "failed" = "skipped";
+      let smsStatus: "sent" | "skipped" | "failed" = "skipped";
+      let clientEmailSent = false;
+      let clientSmsSent = false;
+
+      try {
+        const emailResult = await sendBookingEmails(notifyPayload);
+        emailStatus = emailResult.status;
+        clientEmailSent = emailResult.clientSent;
+      } catch (err) {
+        console.error(
+          "sendBookingEmails threw",
+          err instanceof Error ? err.message : "unknown"
+        );
+        emailStatus = "failed";
+      }
+
+      try {
+        const smsResult = await sendBookingSms(notifyPayload);
+        smsStatus = smsResult.status;
+        clientSmsSent = smsResult.clientSent;
+      } catch (err) {
+        console.error(
+          "sendBookingSms threw",
+          err instanceof Error ? err.message : "unknown"
+        );
+        smsStatus = "failed";
+      }
+
       return NextResponse.json({
         ok: true,
         booking: {
@@ -129,6 +189,12 @@ export async function POST(req: Request) {
           durationMin: svc.durationMin,
           whatsappUrl: wa,
           message: msg,
+        },
+        notifications: {
+          email: emailStatus,
+          sms: smsStatus,
+          clientEmailSent,
+          clientSmsSent,
         },
       });
     } catch (err: unknown) {

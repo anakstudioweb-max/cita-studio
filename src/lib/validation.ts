@@ -7,6 +7,10 @@ export const bookSchema = z.object({
   time: z.string().regex(/^\d{2}:\d{2}$/),
   clientName: z.string().min(2).max(80),
   clientPhone: z.string().min(7).max(20),
+  clientEmail: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : typeof v === "string" ? v.trim() : v),
+    z.string().email().optional()
+  ),
   notes: z.string().max(500).optional().default(""),
 });
 
