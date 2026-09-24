@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
+import { useToast } from "@/components/Toast";
 import { money } from "@/lib/utils";
 
 type CatalogService = {
@@ -74,13 +75,13 @@ const emptyCreatePro = {
 
 export default function AdminPage() {
   const { t, locale } = useI18n();
+  const { toast } = useToast();
   const router = useRouter();
   const [pros, setPros] = useState<Pro[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [catalog, setCatalog] = useState<CatalogService[]>([]);
   const [filterPro, setFilterPro] = useState("");
   const [tab, setTab] = useState<Tab>("services");
-  const [msg, setMsg] = useState<string | null>(null);
   const [expandedPro, setExpandedPro] = useState<string | null>(null);
   const [proServices, setProServices] = useState<Record<string, ProService[]>>(
     {}
@@ -103,9 +104,10 @@ export default function AdminPage() {
     >
   >({});
 
-  const flash = (m: string) => {
-    setMsg(m);
-    setTimeout(() => setMsg(null), 2500);
+  const [saving, setSaving] = useState(false);
+
+  const flash = (m: string, tone: "success" | "error" = "success") => {
+    toast(m, tone);
   };
 
   const load = useCallback(async () => {
@@ -165,6 +167,8 @@ export default function AdminPage() {
 
   async function saveCatalog(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true);
     const payload = {
       ...(catalogForm.id ? { id: catalogForm.id } : {}),
       category: catalogForm.category,
@@ -179,19 +183,25 @@ export default function AdminPage() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
-      flash(t.errorGeneric);
+      flash(t.errorGeneric, "error");
+      setSaving(false);
       return;
     }
-    flash(catalogForm.id ? t.updated : t.created);
+    flash(catalogForm.id ? "Saved" : "Service added");
     setShowCatalogForm(false);
     setCatalogForm({ ...emptyCatalogForm });
-    load();
+    await load();
+    setSaving(false);
   }
 
   async function deleteCatalog(id: string) {
     if (!confirm(t.confirmDeleteCatalog)) return;
-    await fetch(`/api/admin/catalog?id=${id}`, { method: "DELETE" });
-    flash(t.updated);
+    const res = await fetch(`/api/admin/catalog?id=${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      flash(t.errorGeneric, "error");
+      return;
+    }
+    flash("Service deleted");
     load();
   }
 
@@ -209,7 +219,8 @@ export default function AdminPage() {
 
   async function savePro(id: string) {
     const draft = draftPros[id];
-    if (!draft) return;
+    if (!draft || saving) return;
+    setSaving(true);
     const res = await fetch("/api/admin/professionals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -230,22 +241,31 @@ export default function AdminPage() {
       }),
     });
     if (!res.ok) {
-      flash(t.errorGeneric);
+      flash(t.errorGeneric, "error");
+      setSaving(false);
       return;
     }
-    flash(t.updated);
-    load();
+    flash("Saved");
+    await load();
+    setSaving(false);
   }
 
   async function removePro(id: string) {
     if (!confirm("Remove professional and cascade bookings?")) return;
-    await fetch(`/api/admin/professionals?id=${id}`, { method: "DELETE" });
+    const res = await fetch(`/api/admin/professionals?id=${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      flash(t.errorGeneric, "error");
+      return;
+    }
+    flash("Professional removed");
     if (expandedPro === id) setExpandedPro(null);
     load();
   }
 
   async function createProfessional(e: React.FormEvent) {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true);
     const res = await fetch("/api/admin/professionals", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -253,13 +273,15 @@ export default function AdminPage() {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      flash(err.error || t.errorGeneric);
+      flash(err.error || t.errorGeneric, "error");
+      setSaving(false);
       return;
     }
-    flash(t.created);
+    flash("Professional created");
     setShowCreatePro(false);
     setCreatePro({ ...emptyCreatePro });
-    load();
+    await load();
+    setSaving(false);
   }
 
   async function saveProService(
@@ -285,10 +307,10 @@ export default function AdminPage() {
       }),
     });
     if (!res.ok) {
-      flash(t.errorGeneric);
+      flash(t.errorGeneric, "error");
       return;
     }
-    flash(t.updated);
+    flash(svc.id ? "Saved" : "Service added");
     await loadProServices(professionalId);
   }
 
@@ -297,8 +319,12 @@ export default function AdminPage() {
       method: "DELETE",
     });
     const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      flash(t.errorGeneric, "error");
+      return;
+    }
     if (data.softDeleted) flash(t.hideService);
-    else flash(t.updated);
+    else flash("Service deleted");
     await loadProServices(professionalId);
   }
 
@@ -348,11 +374,16 @@ export default function AdminPage() {
     id: string,
     patch: { status?: Booking["status"]; priceCents?: number }
   ) {
-    await fetch("/api/admin/bookings", {
+    const res = await fetch("/api/admin/bookings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...patch }),
     });
+    if (!res.ok) {
+      flash(t.errorGeneric, "error");
+      return;
+    }
+    flash(patch.status ? "Status updated" : "Saved");
     load();
   }
 
@@ -370,7 +401,7 @@ export default function AdminPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="chip">{t.admin}</p>
-          <h1 className="mt-2 font-serif text-4xl">Anak.Studio</h1>
+          <h1 className="mt-2 heading-display text-3xl">Anak.Studio</h1>
         </div>
         <button
           className="btn btn-ghost"
@@ -404,8 +435,6 @@ export default function AdminPage() {
           </button>
         ))}
       </div>
-      {msg && <p className="text-sm text-[var(--blush)]">{msg}</p>}
-
       {/* ——— Catalog Services ——— */}
       {tab === "services" && (
         <div className="space-y-4">
@@ -423,8 +452,8 @@ export default function AdminPage() {
           </div>
 
           {showCatalogForm && (
-            <form className="card space-y-3 p-4" onSubmit={saveCatalog}>
-              <p className="font-serif text-xl">
+            <form className="card space-y-3 p-3.5" onSubmit={saveCatalog}>
+              <p className="heading-section text-lg">
                 {catalogForm.id ? t.editService : t.newCatalogService}
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -506,12 +535,13 @@ export default function AdminPage() {
                 </label>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button className="btn" type="submit">
-                  {t.save}
+                <button className="btn btn-primary" type="submit" disabled={saving}>
+                  {saving ? t.loading : t.save}
                 </button>
                 <button
                   type="button"
                   className="btn btn-ghost"
+                  disabled={saving}
                   onClick={() => {
                     setShowCatalogForm(false);
                     setCatalogForm({ ...emptyCatalogForm });
@@ -524,19 +554,19 @@ export default function AdminPage() {
           )}
 
           {catalog.length === 0 && (
-            <p className="text-sm text-[var(--taupe)]">{t.noCatalogYet}</p>
+            <p className="empty-state">{t.noCatalogYet}</p>
           )}
           <div className="space-y-3">
             {catalog.map((s) => (
               <div
                 key={s.id}
-                className="card flex flex-wrap items-start justify-between gap-3 p-4"
+                className="card flex flex-wrap items-start justify-between gap-3 p-3.5"
               >
                 <div>
                   <p className="chip">
                     {s.category === "brows" ? t.brows : t.lashes}
                   </p>
-                  <p className="mt-1 font-serif text-2xl">{s.name}</p>
+                  <p className="mt-1 heading-section text-xl">{s.name}</p>
                   {s.description && (
                     <p className="text-sm text-[var(--taupe)]">
                       {s.description}
@@ -580,8 +610,8 @@ export default function AdminPage() {
           </div>
 
           {showCreatePro && (
-            <form className="card space-y-3 p-4" onSubmit={createProfessional}>
-              <p className="font-serif text-xl">{t.createProfessional}</p>
+            <form className="card space-y-3 p-3.5" onSubmit={createProfessional}>
+              <p className="heading-section text-lg">{t.createProfessional}</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-sm">
                   {t.email}
@@ -631,12 +661,13 @@ export default function AdminPage() {
                 </label>
               </div>
               <div className="flex gap-2">
-                <button className="btn" type="submit">
-                  {t.createAccount}
+                <button className="btn btn-primary" type="submit" disabled={saving}>
+                  {saving ? t.loading : t.createAccount}
                 </button>
                 <button
                   type="button"
                   className="btn btn-ghost"
+                  disabled={saving}
                   onClick={() => setShowCreatePro(false)}
                 >
                   {t.cancel}
@@ -659,10 +690,10 @@ export default function AdminPage() {
                   catalogServiceId: "",
                 };
               return (
-                <div key={p.id} className="card space-y-3 p-4">
+                <div key={p.id} className="card space-y-3 p-3.5">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
-                      <p className="font-serif text-2xl">{p.name}</p>
+                      <p className="heading-section text-xl">{p.name}</p>
                       <p className="text-sm text-[var(--taupe)]">
                         {p.email} · {p.city} · {p.status}
                         {p.paidUntil ? ` · ${p.paidUntil}` : ""}
@@ -697,7 +728,7 @@ export default function AdminPage() {
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ id: p.id, status }),
                           }).then(() => {
-                            flash(t.updated);
+                            flash("Saved");
                             load();
                           });
                         }}
@@ -719,7 +750,7 @@ export default function AdminPage() {
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ id: p.id, paidUntil }),
                           }).then(() => {
-                            flash(t.updated);
+                            flash("Saved");
                             load();
                           });
                         }}
@@ -738,7 +769,7 @@ export default function AdminPage() {
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ id: p.id, status, paidUntil }),
                           }).then(() => {
-                            flash(t.updated);
+                            flash("Saved");
                             load();
                           });
                         }}
@@ -932,12 +963,12 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      <button className="btn" onClick={() => savePro(p.id)}>
-                        {t.save}
+                      <button className="btn btn-primary" disabled={saving} onClick={() => savePro(p.id)}>
+                        {saving ? t.loading : t.save}
                       </button>
 
                       <div className="space-y-3 border-t border-[var(--line)] pt-4">
-                        <p className="font-serif text-xl">{t.services}</p>
+                        <p className="heading-section text-lg">{t.services}</p>
                         {svcs.length === 0 && (
                           <p className="text-sm text-[var(--taupe)]">
                             {t.noProServices}
@@ -946,7 +977,7 @@ export default function AdminPage() {
                         {svcs.map((s) => (
                           <div
                             key={s.id}
-                            className="space-y-2 rounded-2xl border border-[var(--line)] p-3"
+                            className="space-y-2 rounded-[12px] border border-[var(--line)] p-3"
                           >
                             <div className="grid gap-2 sm:grid-cols-2">
                               <input
@@ -1065,7 +1096,7 @@ export default function AdminPage() {
                           </div>
                         ))}
 
-                        <div className="space-y-2 rounded-2xl border border-dashed border-[var(--line)] p-3">
+                        <div className="space-y-2 rounded-[12px] border border-dashed border-[var(--line)] p-3">
                           <p className="text-sm">{t.addFromCatalog}</p>
                           <select
                             className="input"
@@ -1182,10 +1213,10 @@ export default function AdminPage() {
             </select>
           </label>
           {bookings.map((b) => (
-            <div key={b.id} className="card space-y-2 p-4">
+            <div key={b.id} className="card space-y-2 p-3.5">
               <div className="flex flex-wrap justify-between gap-2">
                 <div>
-                  <p className="font-serif text-xl">{b.refCode}</p>
+                  <p className="heading-section text-lg">{b.refCode}</p>
                   <p className="text-sm text-[var(--taupe)]">
                     {b.professionalName} · {b.serviceName} · {b.clientName}
                   </p>
@@ -1195,7 +1226,7 @@ export default function AdminPage() {
                     })}
                   </p>
                 </div>
-                <p className="font-serif text-xl">
+                <p className="heading-section text-lg">
                   {money(b.priceCents, locale)}
                 </p>
               </div>

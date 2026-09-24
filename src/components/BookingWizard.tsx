@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n/context";
+import { useToast } from "@/components/Toast";
 import { money } from "@/lib/utils";
 
 type CatalogService = {
@@ -66,6 +67,7 @@ function todayStr() {
 
 export function BookingWizard() {
   const { t, locale } = useI18n();
+  const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [services, setServices] = useState<CatalogService[]>([]);
   const [selectedService, setSelectedService] = useState<CatalogService | null>(
@@ -155,8 +157,10 @@ export function BookingWizard() {
       }
       setConfirm(data.booking);
       setStep(5);
+      toast("Booking confirmed");
     } catch {
       setError(t.errorGeneric);
+      toast(t.errorGeneric, "error");
     } finally {
       setLoading(false);
     }
@@ -167,21 +171,20 @@ export function BookingWizard() {
 
   return (
     <div className="space-y-10">
-      <section className="pt-4 sm:pt-8">
-        <p className="chip mb-5">{t.eyebrow}</p>
-        <h1 className="font-serif text-5xl leading-[1.05] tracking-tight sm:text-6xl lg:text-7xl">
+      <section className="pt-2 sm:pt-4">
+        <p className="chip mb-4">{t.eyebrow}</p>
+        <h1 className="heading-display text-4xl sm:text-5xl lg:text-6xl">
           {t.title}
           <br />
-          <em className="font-normal text-[var(--taupe)]">{t.titleItalic}</em>
+          <span className="font-medium text-[var(--taupe)]">{t.titleItalic}</span>
         </h1>
-        <p className="mt-5 max-w-xl text-lg leading-relaxed text-[var(--taupe)] sm:text-xl">
+        <p className="mt-4 max-w-xl text-base leading-relaxed text-[var(--taupe)] sm:text-lg">
           {t.sub}
         </p>
-        <div className="gold-line mt-8 max-w-md" />
       </section>
 
       {dbError && (
-        <div className="card border-[var(--blush)]/40 p-4 text-sm text-[var(--taupe)]">
+        <div className="card border-[var(--line)] p-4 text-sm text-[var(--taupe)]">
           {t.dbMissing}
         </div>
       )}
@@ -208,7 +211,7 @@ export function BookingWizard() {
                 active
                   ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--ivory)]"
                   : done
-                    ? "border-[var(--blush)] bg-[var(--paper)] text-[var(--ink)]"
+                    ? "border-[var(--line)] bg-[var(--paper)] text-[var(--ink)]"
                     : "border-[var(--line)] text-[var(--taupe)]"
               }`}
               aria-current={active ? "step" : undefined}
@@ -254,20 +257,20 @@ export function BookingWizard() {
       {step === 2 && selectedService && (
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="font-serif text-3xl">{selectedService.name}</h2>
+            <h2 className="heading-section text-2xl">{selectedService.name}</h2>
             <button className="btn btn-ghost" onClick={() => setStep(1)}>
               {t.back}
             </button>
           </div>
           {loading && <p className="text-[var(--taupe)]">{t.loading}</p>}
           {!loading && pros.length === 0 && (
-            <p className="card p-6 text-[var(--taupe)]">{t.noPros}</p>
+            <p className="empty-state">{t.noPros}</p>
           )}
           <div className="grid gap-4 sm:grid-cols-2">
             {pros.map((p) => (
               <button
                 key={p.id}
-                className="card tap flex gap-4 p-4 text-left transition hover:border-[var(--blush)]"
+                className="card tap flex gap-4 p-4 text-left transition hover:border-[var(--ink)]"
                 onClick={() => {
                   setSelectedPro(p);
                   setStep(3);
@@ -277,10 +280,10 @@ export function BookingWizard() {
                 <img
                   src={p.photoUrl || "/avatars/luna.svg"}
                   alt=""
-                  className="h-20 w-20 rounded-2xl object-cover"
+                  className="h-20 w-20 rounded-[12px] object-cover"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="font-serif text-2xl leading-tight">{p.name}</p>
+                  <p className="heading-section text-lg">{p.name}</p>
                   <p className="mt-1 line-clamp-2 text-sm text-[var(--taupe)]">
                     {p.bio}
                   </p>
@@ -305,7 +308,7 @@ export function BookingWizard() {
         <section className="space-y-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="font-serif text-3xl">{t.pickDay}</h2>
+              <h2 className="heading-section text-2xl">{t.pickDay}</h2>
               <p className="text-sm text-[var(--taupe)]">
                 {selectedPro.name} · {selectedPro.service.name}
               </p>
@@ -328,7 +331,7 @@ export function BookingWizard() {
               >
                 ‹
               </button>
-              <p className="font-serif text-xl capitalize">{monthLabel}</p>
+              <p className="heading-section text-base capitalize">{monthLabel}</p>
               <button
                 className="tap rounded-full border border-[var(--line)] px-3"
                 onClick={() =>
@@ -360,7 +363,7 @@ export function BookingWizard() {
                     key={i}
                     disabled={disabled}
                     onClick={() => setDate(ds)}
-                    className={`tap min-h-14 rounded-2xl text-base font-medium ${
+                    className={`tap min-h-12 rounded-[12px] text-base font-medium ${
                       selected
                         ? "bg-[var(--ink)] text-[var(--ivory)]"
                         : disabled
@@ -378,7 +381,7 @@ export function BookingWizard() {
 
           {date && (
             <div>
-              <h3 className="mb-3 font-serif text-2xl">{t.pickTime}</h3>
+              <h3 className="mb-3 heading-section text-xl">{t.pickTime}</h3>
               {loading && <p className="text-[var(--taupe)]">{t.loading}</p>}
               {!loading && slots.length === 0 && (
                 <p className="text-[var(--taupe)]">{t.noSlots}</p>
@@ -414,12 +417,12 @@ export function BookingWizard() {
       {step === 4 && selectedPro && date && time && (
         <section className="mx-auto max-w-lg space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-serif text-3xl">{t.stepDetails}</h2>
+            <h2 className="heading-section text-2xl">{t.stepDetails}</h2>
             <button className="btn btn-ghost" onClick={() => setStep(3)}>
               {t.back}
             </button>
           </div>
-          <div className="card space-y-1 p-4 text-sm text-[var(--taupe)]">
+          <div className="card space-y-1 p-3.5 text-sm text-[var(--taupe)]">
             <p>
               {selectedPro.service.name} · {selectedPro.name}
             </p>
@@ -469,8 +472,8 @@ export function BookingWizard() {
       {step === 5 && confirm && (
         <section className="mx-auto max-w-lg space-y-5">
           <p className="chip">{t.confirmed}</p>
-          <h2 className="font-serif text-4xl sm:text-5xl tracking-tight">{confirm.refCode}</h2>
-          <div className="card space-y-3 p-5 text-sm">
+          <h2 className="heading-display text-3xl tracking-tight sm:text-4xl">{confirm.refCode}</h2>
+          <div className="card space-y-3 p-4 text-sm">
             <Row label={t.professional} value={confirm.professionalName} />
             <Row label={t.stepService} value={confirm.serviceName} />
             <Row label={t.date} value={confirm.whenLabel} />
@@ -492,6 +495,7 @@ export function BookingWizard() {
               onClick={async () => {
                 await navigator.clipboard.writeText(confirm.message);
                 setCopied(true);
+                toast("Copied");
               }}
             >
               {copied ? t.copied : t.copyMsg}
@@ -503,6 +507,7 @@ export function BookingWizard() {
               onClick={async () => {
                 await navigator.clipboard.writeText(confirm.message);
                 setCopied(true);
+                toast("Copied");
               }}
             >
               {copied ? t.copied : t.copyMsg}
@@ -539,17 +544,17 @@ function ServiceGroup({
   if (!items.length) return null;
   return (
     <div>
-      <h2 className="mb-3 font-serif text-3xl">{title}</h2>
+      <h2 className="mb-3 heading-section text-xl">{title}</h2>
       <div className="grid gap-3 sm:grid-cols-2">
         {items.map((s) => (
           <button
             key={s.id}
             disabled={!s.available}
             onClick={() => onSelect(s)}
-            className="card tap flex min-h-[5.5rem] items-center justify-between gap-3 p-6 text-left disabled:opacity-40"
+            className="card tap flex min-h-[4.5rem] items-center justify-between gap-3 p-4 text-left transition hover:bg-[var(--paper)] disabled:opacity-40"
           >
             <div>
-              <p className="font-serif text-3xl leading-tight">{s.name}</p>
+              <p className="heading-section text-xl leading-tight">{s.name}</p>
               <p className="mt-1 text-sm text-[var(--taupe)]">
                 {s.durationMin}
                 {minutesLabel}

@@ -4,7 +4,7 @@ import Link from "next/link";
 /** Official Anak.Studio wordmark */
 export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const height = size === "lg" ? 56 : size === "sm" ? 32 : 40;
-  const width = Math.round(height * (480 / 120)); // approximate wordmark aspect; Next will preserve
+  const width = Math.round(height * (480 / 120));
 
   return (
     <Link
@@ -17,7 +17,7 @@ export function Logo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
         alt="Anak.Studio"
         width={width}
         height={height}
-        className="h-8 w-auto sm:h-10"
+        className="h-7 w-auto sm:h-8"
         priority
       />
     </Link>

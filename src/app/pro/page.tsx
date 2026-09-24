@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
+import { useToast } from "@/components/Toast";
 import { money } from "@/lib/utils";
 
 type Pro = {
@@ -60,6 +61,7 @@ const emptyDraft = {
 
 export default function ProPanelPage() {
   const { t, locale } = useI18n();
+  const { toast } = useToast();
   const router = useRouter();
   const [tab, setTab] = useState<"appointments" | "profile" | "services">(
     "appointments"
@@ -80,7 +82,7 @@ export default function ProPanelPage() {
     const n = new Date();
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
   });
-  const [msg, setMsg] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   async function load() {
     const me = await fetch("/api/auth/me").then((r) => r.json());
@@ -139,13 +141,21 @@ export default function ProPanelPage() {
 
   async function saveProfile(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!pro) return;
-    const res = await fetch("/api/pro/profile", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(pro),
-    });
-    if (res.ok) setMsg(t.updated);
+    if (!pro || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/pro/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pro),
+      });
+      if (res.ok) toast("Saved");
+      else toast(t.errorGeneric, "error");
+    } catch {
+      toast(t.errorGeneric, "error");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function saveService(
@@ -169,10 +179,10 @@ export default function ProPanelPage() {
       }),
     });
     if (!res.ok) {
-      setMsg(t.errorGeneric);
+      toast(t.errorGeneric, "error");
       return false;
     }
-    setMsg(svc.id ? t.updated : t.created);
+    toast(svc.id ? "Saved" : "Service added");
     await load();
     return true;
   }
@@ -181,16 +191,18 @@ export default function ProPanelPage() {
     const res = await fetch(`/api/pro/services?id=${id}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setMsg(t.errorGeneric);
+      toast(t.errorGeneric, "error");
       return;
     }
-    if (data.softDeleted) setMsg(t.hideService);
-    else setMsg(t.updated);
+    if (data.softDeleted) toast(t.hideService);
+    else toast("Service deleted");
     await load();
   }
 
   async function addFreeForm() {
-    if (!draft.name.trim()) return;
+    if (!draft.name.trim() || saving) return;
+    setSaving(true);
+    try {
     const ok = await saveService({
       name: draft.name.trim(),
       description: draft.description,
@@ -201,6 +213,9 @@ export default function ProPanelPage() {
     if (ok) {
       setDraft(emptyDraft);
       setShowAdd(false);
+    }
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -221,11 +236,16 @@ export default function ProPanelPage() {
     id: string,
     patch: { status?: Booking["status"]; priceCents?: number }
   ) {
-    await fetch("/api/pro/bookings", {
+    const res = await fetch("/api/pro/bookings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...patch }),
     });
+    if (!res.ok) {
+      toast(t.errorGeneric, "error");
+      return;
+    }
+    toast(patch.status ? "Status updated" : "Saved");
     load();
   }
 
@@ -238,7 +258,7 @@ export default function ProPanelPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="chip">{t.proPanel}</p>
-          <h1 className="mt-2 font-serif text-4xl">{pro.name}</h1>
+          <h1 className="mt-2 heading-display text-3xl">{pro.name}</h1>
           <p className="text-sm text-[var(--taupe)]">
             {pro.status} · {t.paidUntil}: {pro.paidUntil || "—"}
           </p>
@@ -274,8 +294,6 @@ export default function ProPanelPage() {
         ))}
       </div>
 
-      {msg && <p className="text-sm text-[var(--blush)]">{msg}</p>}
-
       {tab === "appointments" && (
         <div className="space-y-4">
           <label className="text-sm">
@@ -296,11 +314,11 @@ export default function ProPanelPage() {
                 ["cancelled", t.cancelled],
               ] as const
             ).map(([k, label]) => (
-              <div key={k} className="card p-4">
+              <div key={k} className="card p-3.5">
                 <p className="text-xs uppercase tracking-wide text-[var(--muted)]">
                   {label}
                 </p>
-                <p className="mt-1 font-serif text-2xl">
+                <p className="mt-1 heading-section text-xl">
                   {money(totals[k], locale)}
                 </p>
               </div>
@@ -308,10 +326,10 @@ export default function ProPanelPage() {
           </div>
           <div className="space-y-3">
             {dayList.map((b) => (
-              <div key={b.id} className="card space-y-2 p-4">
+              <div key={b.id} className="card space-y-2 p-3.5">
                 <div className="flex flex-wrap justify-between gap-2">
                   <div>
-                    <p className="font-serif text-xl">{b.refCode}</p>
+                    <p className="heading-section text-lg">{b.refCode}</p>
                     <p className="text-sm text-[var(--taupe)]">
                       {b.serviceName} · {b.clientName} · {b.clientPhone}
                     </p>
@@ -321,7 +339,7 @@ export default function ProPanelPage() {
                       })}
                     </p>
                   </div>
-                  <p className="font-serif text-xl">
+                  <p className="heading-section text-lg">
                     {money(b.priceCents, locale)}
                   </p>
                 </div>
@@ -354,14 +372,14 @@ export default function ProPanelPage() {
               </div>
             ))}
             {!dayList.length && (
-              <p className="text-[var(--taupe)]">No appointments this month.</p>
+              <p className="empty-state">No appointments this month.</p>
             )}
           </div>
         </div>
       )}
 
       {tab === "profile" && (
-        <form className="card grid max-w-xl gap-3 p-5" onSubmit={saveProfile}>
+        <form className="card grid max-w-xl gap-3 p-3.5" onSubmit={saveProfile}>
           {(
             [
               ["name", t.name],
@@ -434,7 +452,7 @@ export default function ProPanelPage() {
               }
             />
           </label>
-          <button className="btn btn-primary">{t.save}</button>
+          <button className="btn btn-primary" disabled={saving}>{saving ? t.loading : t.save}</button>
         </form>
       )}
 
@@ -470,7 +488,7 @@ export default function ProPanelPage() {
           </div>
 
           {showAdd && (
-            <div className="card space-y-3 border-dashed p-4">
+            <div className="card space-y-3 border-dashed p-3.5">
               <p className="text-sm font-medium">{t.freeFormService}</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 <input
@@ -528,9 +546,10 @@ export default function ProPanelPage() {
                 <button
                   className="btn btn-primary"
                   type="button"
+                  disabled={saving}
                   onClick={addFreeForm}
                 >
-                  {t.add}
+                  {saving ? t.loading : t.add}
                 </button>
                 <button
                   className="btn btn-ghost"
@@ -547,7 +566,7 @@ export default function ProPanelPage() {
           )}
 
           {services.map((s) => (
-            <div key={s.id} className="card grid gap-2 p-4 sm:grid-cols-2">
+            <div key={s.id} className="card grid gap-2 p-3.5 sm:grid-cols-2">
               <input
                 className="input"
                 value={s.name}
@@ -637,7 +656,7 @@ export default function ProPanelPage() {
           ))}
 
           {!services.length && !showAdd && (
-            <p className="text-[var(--taupe)]">{t.noProServices}</p>
+            <p className="empty-state">{t.noProServices}</p>
           )}
         </div>
       )}
