@@ -22,6 +22,12 @@ export function SiteFooter() {
           </Link>
           <Link
             className="min-h-10 inline-flex items-center text-[var(--taupe)] underline-offset-4 transition hover:text-[var(--ink)] hover:underline"
+            href="/terms"
+          >
+            {t.terms}
+          </Link>
+          <Link
+            className="min-h-10 inline-flex items-center text-[var(--taupe)] underline-offset-4 transition hover:text-[var(--ink)] hover:underline"
             href="/contact"
           >
             {t.contact}
