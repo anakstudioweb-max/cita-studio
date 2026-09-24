@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/context";
 import { useToast } from "@/components/Toast";
 import { money } from "@/lib/utils";
+import { ProAppointments } from "@/components/ProAppointments";
 
 type Pro = {
   id: string;
@@ -39,38 +40,6 @@ type CatalogItem = {
   basePriceCents: number;
 };
 
-type Booking = {
-  id: string;
-  refCode: string;
-  clientName: string;
-  clientPhone: string;
-  clientEmail?: string;
-  startAt: string;
-  endAt?: string;
-  priceCents: number;
-  status: "requested" | "confirmed" | "done" | "cancelled";
-  serviceName?: string;
-  notes?: string;
-};
-
-/** Houston local date (YYYY-MM-DD) + time (HH:mm) from an ISO timestamp. */
-function houstonDateTime(iso: string): { date: string; time: string } {
-  const d = new Date(iso);
-  const date = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Chicago",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(d);
-  const time = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "America/Chicago",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(d);
-  return { date, time };
-}
-
 const emptyDraft = {
   name: "",
   description: "",
@@ -87,27 +56,11 @@ export default function ProPanelPage() {
     "appointments"
   );
   const [pro, setPro] = useState<Pro | null>(null);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [totals, setTotals] = useState({
-    requested: 0,
-    confirmed: 0,
-    done: 0,
-    cancelled: 0,
-  });
   const [services, setServices] = useState<Svc[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [draft, setDraft] = useState(emptyDraft);
   const [showAdd, setShowAdd] = useState(false);
-  const [month, setMonth] = useState(() => {
-    const n = new Date();
-    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}`;
-  });
   const [saving, setSaving] = useState(false);
-  /** Pending confirm edits: bookingId → { date, time } in Houston local. */
-  const [editDrafts, setEditDrafts] = useState<
-    Record<string, { date: string; time: string }>
-  >({});
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   async function load() {
     const me = await fetch("/api/auth/me").then((r) => r.json());
@@ -120,21 +73,6 @@ export default function ProPanelPage() {
       return;
     }
     setPro(me.professional);
-    const b = await fetch(`/api/pro/bookings?month=${month}`).then((r) =>
-      r.json()
-    );
-    const list: Booking[] = b.bookings || [];
-    setBookings(list);
-    setTotals(b.totals || totals);
-    setEditDrafts((prev) => {
-      const next: Record<string, { date: string; time: string }> = { ...prev };
-      for (const booking of list) {
-        if (booking.status === "requested" && !next[booking.id]) {
-          next[booking.id] = houstonDateTime(booking.startAt);
-        }
-      }
-      return next;
-    });
     const s = await fetch("/api/pro/services").then((r) => r.json());
     setServices(s.services || []);
   }
@@ -142,7 +80,7 @@ export default function ProPanelPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [month]);
+  }, []);
 
   useEffect(() => {
     fetch("/api/catalog")
@@ -167,12 +105,6 @@ export default function ProPanelPage() {
       })
       .catch(() => setCatalog([]));
   }, []);
-
-  const dayList = useMemo(() => {
-    return [...bookings].sort(
-      (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime()
-    );
-  }, [bookings]);
 
   async function saveProfile(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -267,69 +199,6 @@ export default function ProPanelPage() {
     });
   }
 
-  async function updateBooking(
-    id: string,
-    patch: {
-      status?: Booking["status"];
-      priceCents?: number;
-      date?: string;
-      time?: string;
-    }
-  ) {
-    const res = await fetch("/api/pro/bookings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...patch }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      toast(data.error || t.errorGeneric, "error");
-      return false;
-    }
-    toast(patch.status ? "Status updated" : "Saved");
-    await load();
-    return true;
-  }
-
-  async function confirmBooking(id: string) {
-    const draft = editDrafts[id] || houstonDateTime(
-      bookings.find((b) => b.id === id)?.startAt || new Date().toISOString()
-    );
-    if (!draft.date || !draft.time) {
-      toast(t.errorGeneric, "error");
-      return;
-    }
-    setConfirmingId(id);
-    try {
-      const res = await fetch("/api/pro/bookings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id,
-          status: "confirmed",
-          date: draft.date,
-          time: draft.time,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast(data.error || t.errorGeneric, "error");
-        return;
-      }
-      toast(t.confirmedToast);
-      setEditDrafts((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      await load();
-    } catch {
-      toast(t.errorGeneric, "error");
-    } finally {
-      setConfirmingId(null);
-    }
-  }
-
   if (!pro) {
     return <p className="pt-10 text-[var(--taupe)]">{t.loading}</p>;
   }
@@ -376,144 +245,7 @@ export default function ProPanelPage() {
       </div>
 
       {tab === "appointments" && (
-        <div className="space-y-4">
-          <label className="text-sm">
-            Month
-            <input
-              className="input mt-1 max-w-xs"
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-            />
-          </label>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {(
-              [
-                ["requested", t.requested],
-                ["confirmed", t.confirmedStatus],
-                ["done", t.done],
-                ["cancelled", t.cancelled],
-              ] as const
-            ).map(([k, label]) => (
-              <div key={k} className="card p-3.5">
-                <p className="text-xs uppercase tracking-wide text-[var(--muted)]">
-                  {label}
-                </p>
-                <p className="mt-1 heading-section text-xl">
-                  {money(totals[k], locale)}
-                </p>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-3">
-            {dayList.map((b) => {
-              const draft =
-                editDrafts[b.id] || houstonDateTime(b.startAt);
-              const isPending = b.status === "requested";
-              return (
-              <div key={b.id} className="card space-y-2 p-3.5">
-                <div className="flex flex-wrap justify-between gap-2">
-                  <div>
-                    <p className="heading-section text-lg">{b.refCode}</p>
-                    <p className="text-sm text-[var(--taupe)]">
-                      {b.serviceName} · {b.clientName} · {b.clientPhone}
-                    </p>
-                    <p className="text-sm">
-                      {new Date(b.startAt).toLocaleString("en-US", {
-                        timeZone: "America/Chicago",
-                      })}
-                    </p>
-                  </div>
-                  <p className="heading-section text-lg">
-                    {money(b.priceCents, locale)}
-                  </p>
-                </div>
-                {isPending ? (
-                  <div className="flex flex-wrap items-end gap-2 border-t border-[var(--line)] pt-3">
-                    <label className="text-xs text-[var(--muted)]">
-                      {t.date}
-                      <input
-                        className="input mt-1 max-w-[11rem]"
-                        type="date"
-                        value={draft.date}
-                        onChange={(e) =>
-                          setEditDrafts((prev) => ({
-                            ...prev,
-                            [b.id]: { ...draft, date: e.target.value },
-                          }))
-                        }
-                      />
-                    </label>
-                    <label className="text-xs text-[var(--muted)]">
-                      {t.time}
-                      <input
-                        className="input mt-1 max-w-[8rem]"
-                        type="time"
-                        value={draft.time}
-                        onChange={(e) =>
-                          setEditDrafts((prev) => ({
-                            ...prev,
-                            [b.id]: { ...draft, time: e.target.value },
-                          }))
-                        }
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={confirmingId === b.id}
-                      onClick={() => confirmBooking(b.id)}
-                    >
-                      {confirmingId === b.id
-                        ? t.confirming
-                        : t.confirmAppointment}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-ghost"
-                      onClick={() =>
-                        updateBooking(b.id, { status: "cancelled" })
-                      }
-                    >
-                      {t.cancelled}
-                    </button>
-                  </div>
-                ) : (
-                <div className="flex flex-wrap gap-2">
-                  <select
-                    className="input max-w-[10rem]"
-                    value={b.status}
-                    onChange={(e) =>
-                      updateBooking(b.id, {
-                        status: e.target.value as Booking["status"],
-                      })
-                    }
-                  >
-                    <option value="requested">{t.requested}</option>
-                    <option value="confirmed">{t.confirmedStatus}</option>
-                    <option value="done">{t.done}</option>
-                    <option value="cancelled">{t.cancelled}</option>
-                  </select>
-                  <input
-                    className="input max-w-[8rem]"
-                    type="number"
-                    defaultValue={b.priceCents / 100}
-                    onBlur={(e) =>
-                      updateBooking(b.id, {
-                        priceCents: Math.round(Number(e.target.value) * 100),
-                      })
-                    }
-                  />
-                </div>
-                )}
-              </div>
-              );
-            })}
-            {!dayList.length && (
-              <p className="empty-state">No appointments this month.</p>
-            )}
-          </div>
-        </div>
+        <ProAppointments locale={locale} />
       )}
 
       {tab === "profile" && (

@@ -134,10 +134,15 @@ export const bookings = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    /** Soft-delete (trash). Null = active on calendar. */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [
+    // Partial unique is enforced in SQL migration (WHERE deleted_at IS NULL).
+    // Drizzle uniqueIndex here is a fallback for typed queries.
     uniqueIndex("bookings_pro_start_unique").on(t.professionalId, t.startAt),
     index("bookings_pro_start_idx").on(t.professionalId, t.startAt),
+    index("bookings_deleted_at_idx").on(t.deletedAt),
   ]
 );
 

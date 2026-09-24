@@ -756,9 +756,13 @@ export function BookingWizard() {
         <section className="mx-auto max-w-lg space-y-5">
           <p className="chip">{t.confirmed}</p>
           <h2 className="heading-display text-3xl tracking-tight sm:text-4xl">
-            {confirm.refCode}
+            {name.trim().split(/\s+/)[0] || confirm.professionalName}
           </h2>
-          <p className="text-[var(--taupe)]">{t.sub}</p>
+          <p className="text-[var(--taupe)]">
+            {confirm.serviceName}
+            {confirm.professionalName ? ` · ${confirm.professionalName}` : ""}
+          </p>
+          <p className="text-sm text-[var(--muted)]">{t.sub}</p>
           <div className="card space-y-3 p-4 text-sm">
             <Row label={t.professional} value={confirm.professionalName} />
             <Row label={t.stepService} value={confirm.serviceName} />

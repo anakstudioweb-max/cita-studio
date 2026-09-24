@@ -122,6 +122,9 @@ export const bookingUpdateSchema = z
     id: z.string().uuid(),
     status: z.enum(["requested", "confirmed", "done", "cancelled"]).optional(),
     priceCents: z.number().int().min(0).optional(),
+    notes: z.string().max(500).optional(),
+    /** true = soft-delete (trash); false = restore from trash. */
+    deleted: z.boolean().optional(),
     /** Houston local date YYYY-MM-DD — pair with time to reschedule. */
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     /** Houston local time HH:mm — pair with date to reschedule. */

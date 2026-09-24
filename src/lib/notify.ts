@@ -35,9 +35,13 @@ function moneyUsd(cents: number) {
   return `$${(cents / 100).toFixed(0)}`;
 }
 
-function placeholderVars(p: BookingNotifyPayload): PlaceholderVars {
+function placeholderVars(
+  p: BookingNotifyPayload,
+  role?: EmailRole
+): PlaceholderVars {
   return {
-    ref: p.refCode,
+    // Never surface internal refs in client copy (even if a DB template still has {{ref}}).
+    ref: role === "client" ? "" : p.refCode,
     service: p.serviceName,
     when: p.whenLabel,
     place: p.place,
@@ -53,16 +57,20 @@ function placeholderVars(p: BookingNotifyPayload): PlaceholderVars {
 type DetailRow = { label: string; value: string };
 
 function detailRows(p: BookingNotifyPayload, role: EmailRole): DetailRow[] {
-  const rows: DetailRow[] = [
-    { label: "Ref", value: p.refCode },
+  // Client emails stay human — no internal ref codes.
+  const rows: DetailRow[] = [];
+  if (role !== "client") {
+    rows.push({ label: "Ref", value: p.refCode });
+  }
+  rows.push(
     { label: "Service", value: p.serviceName },
     { label: "When", value: `${p.whenLabel} (Houston)` },
     ...(p.durationMin
       ? [{ label: "Duration", value: `${p.durationMin} min` }]
       : []),
     { label: "Place", value: p.place },
-    { label: "Price", value: moneyUsd(p.priceCents) },
-  ];
+    { label: "Price", value: moneyUsd(p.priceCents) }
+  );
 
   if (role === "owner" || role === "client") {
     rows.push({ label: "Professional", value: p.professionalName });
@@ -94,10 +102,10 @@ export function buildClientSmsCopyText(
   p: BookingNotifyPayload,
   templates?: TemplateMap
 ): string {
-  const vars = placeholderVars(p);
+  const vars = placeholderVars(p, "client");
   const tpl =
     templates?.sms_client ||
-    "Hi {{clientName}}, your Anak.Studio appointment is confirmed. Ref {{ref}}. {{service}} on {{when}} (Houston time). See you there!";
+    "Hi {{clientName}}, your Anak.Studio appointment is confirmed. {{service}} on {{when}} (Houston time). See you there!";
   return applyPlaceholders(tpl, vars).trim();
 }
 
@@ -147,9 +155,17 @@ export function buildBookingEmailFromTemplates(
   role: EmailRole,
   templates: TemplateMap
 ): { subject: string; html: string; text: string } {
-  const vars = placeholderVars(p);
+  const vars = placeholderVars(p, role);
   const fields = emailFieldsForRole(templates, role);
-  const subject = applyPlaceholders(fields.subject, vars);
+  let subject = applyPlaceholders(fields.subject, vars);
+  // Clean leftover separators if {{ref}} was emptied for client.
+  if (role === "client") {
+    subject = subject
+      .replace(/\s*·\s*·/g, " · ")
+      .replace(/^\s*·\s*|\s*·\s*$/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
   const headline = applyPlaceholders(fields.headline, vars);
   const introHtml = applyPlaceholdersHtml(fields.intro, vars);
   const footerNote = applyPlaceholders(fields.footer, vars);
@@ -471,6 +487,44 @@ export async function sendBookingConfirmedEmail(
     email_client_footer: templates.email_client_confirmed_footer,
   };
   const mail = buildBookingEmailFromTemplates(p, "client", confirmedOverlay);
+  return sendResendEmail({
+    to: clientEmail,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+    role: "client",
+  });
+}
+
+
+
+/**
+ * Email the client when a confirmed appointment's schedule changes.
+ * Reuses the confirm email layout with an "updated" overlay. No-ops when
+ * client email is missing or Resend is unset.
+ */
+export async function sendBookingUpdatedEmail(
+  p: BookingNotifyPayload
+): Promise<NotifyStatus> {
+  const clientEmail = p.clientEmail?.trim();
+  if (!clientEmail?.includes("@")) return "skipped";
+
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const from = process.env.RESEND_FROM?.trim();
+  if (!apiKey || !from) return "skipped";
+
+  const templates = await loadTemplates();
+  const updatedOverlay: TemplateMap = {
+    ...templates,
+    email_client_subject: "Updated · {{service}}",
+    email_client_headline: "Appointment updated",
+    email_client_intro:
+      "{{professionalName}} updated your appointment.\n\nHi {{clientName}}, here are the new details.",
+    email_client_footer:
+      templates.email_client_confirmed_footer ||
+      "Questions? Reply to this email or WhatsApp your professional.",
+  };
+  const mail = buildBookingEmailFromTemplates(p, "client", updatedOverlay);
   return sendResendEmail({
     to: clientEmail,
     subject: mail.subject,

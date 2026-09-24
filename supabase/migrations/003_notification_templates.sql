@@ -15,10 +15,10 @@ INSERT INTO notification_templates (key, value) VALUES
   ('email_owner_headline', 'Marketplace booking'),
   ('email_owner_intro', E'New booking on Anak.Studio.\n\n{{professionalName}} with {{clientName}}'),
   ('email_owner_footer', 'Questions? Reply to this email or WhatsApp your professional.'),
-  ('email_client_subject', 'You''re booked · {{ref}}'),
+  ('email_client_subject', 'You''re booked · {{service}}'),
   ('email_client_headline', 'Request received'),
   ('email_client_intro', E'Thanks — your booking request is in.\n\nHi {{clientName}}, your professional will confirm soon.'),
   ('email_client_footer', 'Questions? Reply to this email or WhatsApp your professional.'),
   ('sms_pro', 'New booking — Anak.Studio {{ref}}: {{service}} · {{when}} Houston · {{place}} · {{price}} · {{clientName}}'),
-  ('sms_client', 'Booking requested — Anak.Studio {{ref}}: {{service}} · {{when}} Houston · {{place}} · {{price}} · {{clientName}}. Your pro will confirm soon.')
+  ('sms_client', 'Hi {{clientName}}, your Anak.Studio appointment is confirmed. {{service}} on {{when}} (Houston time). See you there!')
 ON CONFLICT (key) DO NOTHING;

@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lt, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, ne } from "drizzle-orm";
 import { addMinutes } from "date-fns";
 import { getDb, schema } from "./db";
 import { todayHoustonDateStr } from "./utils";
@@ -100,7 +100,8 @@ export async function getFreeSlots(opts: {
         eq(bookings.professionalId, opts.professionalId),
         gte(bookings.startAt, dayStart),
         lt(bookings.startAt, addMinutes(dayEnd, 1)),
-        ne(bookings.status, "cancelled")
+        ne(bookings.status, "cancelled"),
+        isNull(bookings.deletedAt)
       )
     );
 

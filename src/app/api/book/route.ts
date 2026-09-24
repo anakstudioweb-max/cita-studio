@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, eq, gt, inArray, lt, ne } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, lt, ne } from "drizzle-orm";
 import { addMinutes } from "date-fns";
 import { ZodError } from "zod";
 import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
@@ -79,6 +79,7 @@ export async function POST(req: Request) {
         and(
           eq(schema.bookings.professionalId, pro.id),
           ne(schema.bookings.status, "cancelled"),
+          isNull(schema.bookings.deletedAt),
           lt(schema.bookings.startAt, endAt),
           gt(schema.bookings.endAt, startAt)
         )
@@ -125,13 +126,12 @@ export async function POST(req: Request) {
       const when = formatHouston(startAt, "EEEE, MMM d, yyyy · h:mm a");
       const msg =
         `Hi ${pro.name}, I'd like to confirm my Anak.Studio booking.\n` +
-        `Ref: ${booking.refCode}\n` +
+        `Client: ${booking.clientName} · ${booking.clientPhone}\n` +
         `Service: ${serviceNames}\n` +
         `When: ${when} (Houston)\n` +
         `Duration: ${durationMin} min\n` +
         `Place: ${pro.address}\n` +
-        `Price: $${(priceCents / 100).toFixed(0)}\n` +
-        `Client: ${booking.clientName} · ${booking.clientPhone}` +
+        `Price: $${(priceCents / 100).toFixed(0)}` +
         (booking.notes ? `\nNotes: ${booking.notes}` : "");
 
       const wa = whatsappLink(pro.whatsapp, msg);

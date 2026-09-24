@@ -53,13 +53,13 @@ export const DEFAULT_TEMPLATES: TemplateMap = {
     "New booking on Anak.Studio.\n\n{{professionalName}} with {{clientName}}",
   email_owner_footer:
     "Questions? Reply to this email or WhatsApp your professional.",
-  email_client_subject: "You're booked · {{ref}}",
+  email_client_subject: "You're booked · {{service}}",
   email_client_headline: "Request received",
   email_client_intro:
     "Thanks — your booking request is in.\n\nHi {{clientName}}, your professional will confirm soon.",
   email_client_footer:
     "Questions? Reply to this email or WhatsApp your professional.",
-  email_client_confirmed_subject: "Confirmed · {{ref}} · {{service}}",
+  email_client_confirmed_subject: "Confirmed · {{service}}",
   email_client_confirmed_headline: "You're confirmed",
   email_client_confirmed_intro:
     "Good news — {{professionalName}} confirmed your appointment.\n\nHi {{clientName}}, see you at the time below.",
@@ -70,7 +70,7 @@ export const DEFAULT_TEMPLATES: TemplateMap = {
   // Used as the copy-paste SMS/WhatsApp body in pro/owner booking emails
   // (automatic Telnyx SMS is disabled).
   sms_client:
-    "Hi {{clientName}}, your Anak.Studio appointment is confirmed. Ref {{ref}}. {{service}} on {{when}} (Houston time). See you there!",
+    "Hi {{clientName}}, your Anak.Studio appointment is confirmed. {{service}} on {{when}} (Houston time). See you there!",
 };
 
 const CACHE_TTL_MS = 15_000;
