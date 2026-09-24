@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getSession, hashPassword } from "@/lib/auth/session";
 import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
-import { profileSchema, signupSchema } from "@/lib/validation";
+import { adminCreateSchema, profileSchema } from "@/lib/validation";
 import { slugify } from "@/lib/utils";
 import { z } from "zod";
 
@@ -33,6 +33,8 @@ const adminPatch = profileSchema.extend({
   id: z.string().uuid(),
   status: z.enum(["pending", "active", "paused", "expired"]).optional(),
   paidUntil: z.string().nullable().optional(),
+  /** Optional password reset — bcrypt hashed, never returned to client. */
+  password: z.string().min(1).max(120).optional(),
 });
 
 export async function PATCH(req: Request) {
@@ -42,6 +44,24 @@ export async function PATCH(req: Request) {
   if (!hasDatabaseUrl()) return NextResponse.json({ error: "No DB" }, { status: 503 });
   const body = adminPatch.parse(await req.json());
   const db = getDb();
+
+  const [pro] = await db
+    .select()
+    .from(schema.professionals)
+    .where(eq(schema.professionals.id, body.id))
+    .limit(1);
+  if (!pro) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (body.password !== undefined) {
+    const passwordHash = await hashPassword(body.password);
+    await db
+      .update(schema.users)
+      .set({ passwordHash })
+      .where(eq(schema.users.id, pro.userId));
+  }
+
   const [updated] = await db
     .update(schema.professionals)
     .set({
@@ -62,7 +82,10 @@ export async function PATCH(req: Request) {
     })
     .where(eq(schema.professionals.id, body.id))
     .returning();
-  return NextResponse.json({ professional: updated });
+  return NextResponse.json({
+    professional: updated,
+    passwordUpdated: body.password !== undefined,
+  });
 }
 
 /** Create professional + user account (owner-controlled). */
@@ -72,7 +95,7 @@ export async function POST(req: Request) {
   }
   if (!hasDatabaseUrl()) return NextResponse.json({ error: "No DB" }, { status: 503 });
   try {
-    const body = signupSchema.parse(await req.json());
+    const body = adminCreateSchema.parse(await req.json());
     const db = getDb();
     const email = body.email.toLowerCase();
     const existing = await db
@@ -113,8 +136,25 @@ export async function POST(req: Request) {
       })
       .returning();
 
+    // Seed ALL catalog services onto the new professional
+    const catalog = await db.select().from(schema.catalogServices);
+    if (catalog.length) {
+      await db.insert(schema.professionalServices).values(
+        catalog.map((c) => ({
+          professionalId: pro.id,
+          catalogServiceId: c.id,
+          name: c.name,
+          description: c.description,
+          durationMin: c.durationMin,
+          priceCents: c.basePriceCents,
+          visible: true,
+        }))
+      );
+    }
+
     return NextResponse.json({
       professional: { ...pro, email: user.email },
+      seededServices: catalog.length,
     });
   } catch (e) {
     console.error(e);

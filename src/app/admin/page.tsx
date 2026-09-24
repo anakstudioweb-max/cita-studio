@@ -103,6 +103,9 @@ export default function AdminPage() {
       }
     >
   >({});
+  const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>(
+    {}
+  );
 
   const [saving, setSaving] = useState(false);
 
@@ -277,10 +280,36 @@ export default function AdminPage() {
       setSaving(false);
       return;
     }
-    flash("Professional created");
+    const created = await res.json().catch(() => ({}));
+    const createdEmail =
+      created?.professional?.email || createPro.email || "";
+    flash(`Created — email ${createdEmail}`);
     setShowCreatePro(false);
     setCreatePro({ ...emptyCreatePro });
     await load();
+    setSaving(false);
+  }
+
+  async function setProPassword(professionalId: string) {
+    const password = (passwordDrafts[professionalId] || "").trim();
+    if (!password) {
+      flash("Enter a password", "error");
+      return;
+    }
+    if (saving) return;
+    setSaving(true);
+    const res = await fetch("/api/admin/professionals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: professionalId, password }),
+    });
+    if (!res.ok) {
+      flash(t.errorGeneric, "error");
+      setSaving(false);
+      return;
+    }
+    flash("Password updated");
+    setPasswordDrafts((prev) => ({ ...prev, [professionalId]: "" }));
     setSaving(false);
   }
 
@@ -612,6 +641,9 @@ export default function AdminPage() {
           {showCreatePro && (
             <form className="card space-y-3 p-3.5" onSubmit={createProfessional}>
               <p className="heading-section text-lg">{t.createProfessional}</p>
+              <p className="text-sm text-[var(--taupe)]">
+                They log in with this email and password.
+              </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-sm">
                   {t.email}
@@ -630,7 +662,7 @@ export default function AdminPage() {
                   <input
                     className="input mt-1"
                     type="password"
-                    minLength={8}
+                    minLength={1}
                     required
                     value={createPro.password}
                     onChange={(e) =>
@@ -694,8 +726,12 @@ export default function AdminPage() {
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
                       <p className="heading-section text-xl">{p.name}</p>
+                      <p className="mt-1 text-sm">
+                        <span className="text-[var(--taupe)]">{t.email}: </span>
+                        <span className="font-medium">{p.email || "—"}</span>
+                      </p>
                       <p className="text-sm text-[var(--taupe)]">
-                        {p.email} · {p.city} · {p.status}
+                        {p.city} · {p.status}
                         {p.paidUntil ? ` · ${p.paidUntil}` : ""}
                       </p>
                     </div>
@@ -966,6 +1002,37 @@ export default function AdminPage() {
                       <button className="btn btn-primary" disabled={saving} onClick={() => savePro(p.id)}>
                         {saving ? t.loading : t.save}
                       </button>
+
+                      <div className="space-y-2 rounded-[12px] border border-[var(--line)] p-3">
+                        <p className="text-sm">
+                          <span className="text-[var(--taupe)]">{t.email}: </span>
+                          <span className="font-medium">{p.email || "—"}</span>
+                        </p>
+                        <label className="text-sm block">
+                          Set password
+                          <input
+                            className="input mt-1"
+                            type="password"
+                            autoComplete="new-password"
+                            placeholder="New password"
+                            value={passwordDrafts[p.id] || ""}
+                            onChange={(e) =>
+                              setPasswordDrafts((prev) => ({
+                                ...prev,
+                                [p.id]: e.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={saving}
+                          onClick={() => setProPassword(p.id)}
+                        >
+                          Set password
+                        </button>
+                      </div>
 
                       <div className="space-y-3 border-t border-[var(--line)] pt-4">
                         <p className="heading-section text-lg">{t.services}</p>

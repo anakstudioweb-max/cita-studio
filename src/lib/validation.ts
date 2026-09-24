@@ -23,6 +23,14 @@ export const signupSchema = z.object({
   city: z.string().min(2).max(80).default("Houston"),
 });
 
+/** Owner creates a pro — allow short demo passwords. */
+export const adminCreateSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1).max(120),
+  name: z.string().min(2).max(80),
+  city: z.string().min(2).max(80).default("Houston"),
+});
+
 export const profileSchema = z.object({
   name: z.string().min(2).max(80).optional(),
   bio: z.string().max(800).optional(),

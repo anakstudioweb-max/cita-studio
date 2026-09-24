@@ -24,11 +24,12 @@ export async function POST(req: Request) {
     }
     const body = loginSchema.parse(await req.json());
     const raw = body.email.trim().toLowerCase();
+    // Aliases: admin → owner, user → demo pro (anakmezar20)
     const email =
       raw === "admin"
         ? "admin@anak.studio"
-        : raw === "user"
-          ? "user@anak.studio"
+        : raw === "user" || raw === "user@anak.studio"
+          ? "anakmezar20@gmail.com"
           : raw;
     const db = getDb();
     const [user] = await db
