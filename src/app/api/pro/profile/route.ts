@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getSession } from "@/lib/auth/session";
 import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
 import { profileSchema } from "@/lib/validation";
+import { normalizeInstagram } from "@/lib/instagram";
 
 async function getOwnPro(userId: string) {
   const db = getDb();
@@ -44,7 +45,7 @@ export async function PATCH(req: Request) {
       ...(body.city !== undefined ? { city: body.city } : {}),
       ...(body.address !== undefined ? { address: body.address } : {}),
       ...(body.whatsapp !== undefined ? { whatsapp: body.whatsapp } : {}),
-      ...(body.instagram !== undefined ? { instagram: body.instagram } : {}),
+      ...(body.instagram !== undefined ? { instagram: normalizeInstagram(body.instagram) } : {}),
       ...(body.photoUrl !== undefined ? { photoUrl: body.photoUrl } : {}),
       ...(body.hoursJson !== undefined ? { hoursJson: body.hoursJson } : {}),
       ...(body.closedDaysJson !== undefined

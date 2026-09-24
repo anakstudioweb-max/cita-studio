@@ -47,7 +47,7 @@ export default function LoginPage() {
     <div className="mx-auto max-w-md space-y-5 pt-8">
       <div>
         <h1 className="heading-display text-3xl">{t.login}</h1>
-        <p className="mt-2 text-sm text-[var(--taupe)]">{t.sub}</p>
+        <p className="mt-2 text-sm text-[var(--taupe)]">Professionals and studio owner</p>
       </div>
       <form onSubmit={onSubmit} className="card space-y-4 p-4 sm:p-5">
         <label className="block text-sm font-medium">

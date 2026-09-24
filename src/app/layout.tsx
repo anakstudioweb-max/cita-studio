@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     template: "%s · Anak.Studio",
   },
   description:
-    "Pick the service. Then who does it. Houston lashes and brows marketplace — no account, confirm on WhatsApp.",
+    "Pick your professional. Then a service. Your professional will call or text to confirm. Houston lashes and brows.",
   applicationName: "Anak.Studio",
   alternates: {
     canonical: "/",
@@ -33,13 +33,13 @@ export const metadata: Metadata = {
     siteName: "Anak.Studio",
     title: "Anak.Studio — Houston lashes & brows",
     description:
-      "Pick the service. Then who does it. Houston lashes and brows marketplace — no account, confirm on WhatsApp.",
+      "Pick your professional. Then a service. Your professional will call or text to confirm. Houston lashes and brows.",
   },
   twitter: {
     card: "summary",
     title: "Anak.Studio — Houston lashes & brows",
     description:
-      "Pick the service. Then who does it. Houston lashes and brows marketplace — no account, confirm on WhatsApp.",
+      "Pick your professional. Then a service. Your professional will call or text to confirm. Houston lashes and brows.",
   },
   manifest: "/manifest.webmanifest",
   appleWebApp: {

@@ -32,18 +32,6 @@ export function SiteFooter() {
           >
             {t.contact}
           </Link>
-          <Link
-            className="min-h-10 inline-flex items-center text-[var(--taupe)] underline-offset-4 transition hover:text-[var(--ink)] hover:underline"
-            href="/login"
-          >
-            {t.login}
-          </Link>
-          <Link
-            className="min-h-10 inline-flex items-center text-[var(--taupe)] underline-offset-4 transition hover:text-[var(--ink)] hover:underline"
-            href="/signup"
-          >
-            {t.signup}
-          </Link>
         </nav>
       </div>
     </footer>

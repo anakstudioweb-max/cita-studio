@@ -5,16 +5,8 @@ import { useI18n } from "@/lib/i18n/context";
 import { useToast } from "@/components/Toast";
 import { money } from "@/lib/utils";
 import { parseUsPhone } from "@/lib/phone";
-
-type CatalogService = {
-  id: string;
-  category: "lashes" | "brows";
-  name: string;
-  description: string;
-  durationMin: number;
-  fromPriceCents: number;
-  available: boolean;
-};
+import { instagramHref } from "@/lib/instagram";
+import { downloadIcs, googleCalendarUrl } from "@/lib/calendar";
 
 type ProCard = {
   id: string;
@@ -24,12 +16,15 @@ type ProCard = {
   city: string;
   address: string;
   instagram: string;
-  service: {
-    id: string;
-    name: string;
-    durationMin: number;
-    priceCents: number;
-  };
+  instagramUrl?: string | null;
+};
+
+type ProService = {
+  id: string;
+  name: string;
+  description: string;
+  durationMin: number;
+  priceCents: number;
 };
 
 type Confirmation = {
@@ -41,14 +36,11 @@ type Confirmation = {
   serviceName: string;
   whatsappUrl: string | null;
   message: string;
-  notifications?: {
-    email: "sent" | "skipped" | "failed";
-    sms: "sent" | "skipped" | "failed";
-    clientEmailSent?: boolean;
-    /** Per-client confirmation outcome (skipped if no email provided). */
-    clientEmail?: "sent" | "skipped" | "failed";
-    clientSmsSent?: boolean;
-  };
+  startAt?: string;
+  endAt?: string;
+  date?: string;
+  time?: string;
+  durationMin?: number;
 };
 
 const DAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -74,16 +66,73 @@ function todayStr() {
   return f.format(new Date());
 }
 
+function monogram(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return (name.trim().slice(0, 2) || "?").toUpperCase();
+}
+
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function ProPhoto({
+  name,
+  photoUrl,
+  size = "lg",
+}: {
+  name: string;
+  photoUrl?: string;
+  size?: "lg" | "sm";
+}) {
+  const dim = size === "lg" ? "h-20 w-20 text-lg" : "h-12 w-12 text-sm";
+  if (photoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={photoUrl}
+        alt=""
+        className={`${dim} shrink-0 rounded-full object-cover`}
+      />
+    );
+  }
+  return (
+    <div
+      className={`${dim} flex shrink-0 items-center justify-center rounded-full bg-[var(--paper)] font-semibold tracking-tight text-[var(--ink)]`}
+      aria-hidden
+    >
+      {monogram(name)}
+    </div>
+  );
+}
+
 export function BookingWizard() {
   const { t, locale } = useI18n();
   const { toast } = useToast();
   const [step, setStep] = useState(1);
-  const [services, setServices] = useState<CatalogService[]>([]);
-  const [selectedService, setSelectedService] = useState<CatalogService | null>(
-    null
-  );
   const [pros, setPros] = useState<ProCard[]>([]);
   const [selectedPro, setSelectedPro] = useState<ProCard | null>(null);
+  const [services, setServices] = useState<ProService[]>([]);
+  const [selectedService, setSelectedService] = useState<ProService | null>(
+    null
+  );
   const [cursor, setCursor] = useState(() => {
     const now = new Date();
     return { y: now.getFullYear(), m: now.getMonth() };
@@ -96,43 +145,70 @@ export function BookingWizard() {
   const [email, setEmail] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [prosReady, setProsReady] = useState(false);
+  const [servicesLoading, setServicesLoading] = useState(false);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<Confirmation | null>(null);
-  const [copied, setCopied] = useState(false);
   const [dbError, setDbError] = useState(false);
 
   useEffect(() => {
-    fetch("/api/catalog")
+    const ac = new AbortController();
+    fetch("/api/professionals", { signal: ac.signal })
       .then(async (r) => {
         const d = await r.json().catch(() => ({}));
         if (!r.ok) setDbError(true);
-        setServices(d.services || []);
+        setPros(d.professionals || []);
       })
-      .catch(() => setDbError(true));
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setDbError(true);
+      })
+      .finally(() => setProsReady(true));
+    return () => ac.abort();
   }, []);
 
   useEffect(() => {
-    if (!selectedService) return;
-    setLoading(true);
-    fetch(`/api/professionals?service=${encodeURIComponent(selectedService.name)}`)
-      .then((r) => r.json())
-      .then((d) => setPros(d.professionals || []))
-      .finally(() => setLoading(false));
-  }, [selectedService]);
-
-  useEffect(() => {
-    if (!selectedPro || !date) return;
-    setLoading(true);
-    setTime(null);
+    if (!selectedPro) return;
+    const ac = new AbortController();
     fetch(
-      `/api/slots?professionalId=${selectedPro.id}&serviceId=${selectedPro.service.id}&date=${date}`
+      `/api/professionals?professionalId=${encodeURIComponent(selectedPro.id)}`,
+      { signal: ac.signal }
     )
       .then((r) => r.json())
-      .then((d) => setSlots(d.slots || []))
-      .finally(() => setLoading(false));
-  }, [selectedPro, date]);
+      .then((d) => {
+        setServices(d.services || []);
+        setServicesLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setServices([]);
+        setServicesLoading(false);
+      });
+    return () => ac.abort();
+  }, [selectedPro]);
+
+  useEffect(() => {
+    if (!selectedPro || !selectedService || !date) return;
+    const ac = new AbortController();
+    fetch(
+      `/api/slots?professionalId=${selectedPro.id}&serviceId=${selectedService.id}&date=${date}`,
+      { signal: ac.signal }
+    )
+      .then((r) => r.json())
+      .then((d) => {
+        setSlots(d.slots || []);
+        setSlotsLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setSlots([]);
+        setSlotsLoading(false);
+      });
+    return () => ac.abort();
+  }, [selectedPro, selectedService, date]);
 
   const cells = useMemo(
     () => monthMatrix(cursor.y, cursor.m),
@@ -152,13 +228,12 @@ export function BookingWizard() {
   function validateEmailField(value: string): string | null {
     const trimmed = value.trim();
     if (!trimmed) return null;
-    // Basic RFC-ish check (same spirit as zod email)
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return t.emailInvalid;
     return null;
   }
 
   async function submit() {
-    if (!selectedPro || !date || !time) return;
+    if (!selectedPro || !selectedService || !date || !time) return;
     const pErr = validatePhoneField(phone);
     const eErr = validateEmailField(email);
     setPhoneError(pErr);
@@ -181,7 +256,7 @@ export function BookingWizard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           professionalId: selectedPro.id,
-          professionalServiceId: selectedPro.service.id,
+          professionalServiceId: selectedService.id,
           date,
           time,
           clientName: name,
@@ -195,10 +270,7 @@ export function BookingWizard() {
         setError(data.error || t.errorGeneric);
         return;
       }
-      setConfirm({
-        ...data.booking,
-        notifications: data.notifications,
-      });
+      setConfirm(data.booking);
       setStep(5);
       toast("Booking confirmed");
     } catch {
@@ -209,8 +281,19 @@ export function BookingWizard() {
     }
   }
 
-  const lashes = services.filter((s) => s.category === "lashes");
-  const brows = services.filter((s) => s.category === "brows");
+  const calendarEvent = useMemo(() => {
+    if (!confirm?.startAt || !confirm?.endAt) return null;
+    const start = new Date(confirm.startAt);
+    const end = new Date(confirm.endAt);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    return {
+      title: `${confirm.serviceName} · ${confirm.professionalName}`,
+      description: `Anak.Studio booking ${confirm.refCode}\n${confirm.whenLabel}`,
+      location: confirm.place || "",
+      start,
+      end,
+    };
+  }, [confirm]);
 
   return (
     <div className="space-y-10">
@@ -231,129 +314,168 @@ export function BookingWizard() {
           {t.dbMissing}
         </div>
       )}
-      {!dbError && step === 1 && services.length === 0 && (
+      {!dbError && step === 1 && prosReady && pros.length === 0 && (
         <div className="card border-[var(--line)] p-4 text-sm text-[var(--taupe)]">
-          {t.noServices}
+          {t.noProsHome}
         </div>
       )}
 
-      <ol className="flex flex-wrap gap-3" aria-label="Booking steps">
-        {[
-          t.stepService,
-          t.stepPro,
-          t.stepWhen,
-          t.stepDetails,
-        ].map((label, i) => {
-          const n = i + 1;
-          const active = step === n;
-          const done = step > n;
-          return (
-            <li
-              key={label}
-              className={`inline-flex min-h-12 items-center gap-2 rounded-full border px-3 py-2 text-base ${
-                active
-                  ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--ivory)]"
-                  : done
-                    ? "border-[var(--line)] bg-[var(--paper)] text-[var(--ink)]"
-                    : "border-[var(--line)] text-[var(--taupe)]"
-              }`}
-              aria-current={active ? "step" : undefined}
-            >
-              <span className="step-dot bg-white/10">{n}</span>
-              <span className="pr-1 font-medium">{label}</span>
-            </li>
-          );
-        })}
-      </ol>
+      {step < 5 && (
+        <ol className="flex flex-wrap gap-3" aria-label="Booking steps">
+          {[t.stepPro, t.stepService, t.stepWhen, t.stepDetails].map(
+            (label, i) => {
+              const n = i + 1;
+              const active = step === n;
+              const done = step > n;
+              return (
+                <li
+                  key={label}
+                  className={`inline-flex min-h-12 items-center gap-2 rounded-full border px-3 py-2 text-base ${
+                    active
+                      ? "border-[var(--ink)] bg-[var(--ink)] text-[var(--ivory)]"
+                      : done
+                        ? "border-[var(--line)] bg-[var(--paper)] text-[var(--ink)]"
+                        : "border-[var(--line)] text-[var(--taupe)]"
+                  }`}
+                  aria-current={active ? "step" : undefined}
+                >
+                  <span className="step-dot bg-white/10">{n}</span>
+                  <span className="pr-1 font-medium">{label}</span>
+                </li>
+              );
+            }
+          )}
+        </ol>
+      )}
 
       {step === 1 && (
-        <section className="space-y-8">
-          <ServiceGroup
-            title={t.lashes}
-            items={lashes}
-            locale={locale}
-            minutesLabel={t.minutes}
-            onSelect={(s) => {
-              setSelectedService(s);
-              setSelectedPro(null);
-              setDate(null);
-              setTime(null);
-              setStep(2);
-            }}
-          />
-          <ServiceGroup
-            title={t.brows}
-            items={brows}
-            locale={locale}
-            minutesLabel={t.minutes}
-            onSelect={(s) => {
-              setSelectedService(s);
-              setSelectedPro(null);
-              setDate(null);
-              setTime(null);
-              setStep(2);
-            }}
-          />
+        <section className="space-y-4">
+          <h2 className="heading-section text-2xl">{t.pickProfessional}</h2>
+          {!prosReady && <p className="text-[var(--taupe)]">{t.loading}</p>}
+          <div className="grid gap-4 sm:grid-cols-2">
+            {pros.map((p) => {
+              const ig = p.instagramUrl || instagramHref(p.instagram);
+              return (
+                <div
+                  key={p.id}
+                  className="card relative flex gap-4 p-4 transition hover:border-[var(--ink)]"
+                >
+                  <button
+                    type="button"
+                    className="tap flex min-w-0 flex-1 gap-4 text-left"
+                    onClick={() => {
+                      setSelectedPro(p);
+                      setSelectedService(null);
+                      setServices([]);
+                      setServicesLoading(true);
+                      setDate(null);
+                      setTime(null);
+                      setStep(2);
+                    }}
+                  >
+                    <ProPhoto name={p.name} photoUrl={p.photoUrl} />
+                    <div className="min-w-0 flex-1 pr-8">
+                      <p className="heading-section text-lg">{p.name}</p>
+                      {p.bio ? (
+                        <p className="mt-1 line-clamp-2 text-sm text-[var(--taupe)]">
+                          {p.bio}
+                        </p>
+                      ) : null}
+                      {(p.city || p.address) && (
+                        <p className="mt-2 text-sm text-[var(--muted)]">
+                          {p.address || p.city}
+                        </p>
+                      )}
+                    </div>
+                  </button>
+                  {ig ? (
+                    <a
+                      href={ig}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center rounded-full text-[var(--taupe)] transition hover:bg-[var(--paper)] hover:text-[var(--ink)]"
+                      aria-label="Instagram"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <InstagramIcon className="h-5 w-5" />
+                    </a>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </section>
       )}
 
-      {step === 2 && selectedService && (
+      {step === 2 && selectedPro && (
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="heading-section text-2xl">{selectedService.name}</h2>
-            <button className="btn btn-ghost" onClick={() => setStep(1)}>
+            <div className="flex min-w-0 items-center gap-3">
+              <ProPhoto
+                name={selectedPro.name}
+                photoUrl={selectedPro.photoUrl}
+                size="sm"
+              />
+              <div className="min-w-0">
+                <h2 className="heading-section text-2xl">
+                  {t.pickService}
+                </h2>
+                <p className="text-sm text-[var(--taupe)]">{selectedPro.name}</p>
+              </div>
+            </div>
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                setStep(1);
+                setSelectedService(null);
+              }}
+            >
               {t.back}
             </button>
           </div>
-          {loading && <p className="text-[var(--taupe)]">{t.loading}</p>}
-          {!loading && pros.length === 0 && (
-            <p className="empty-state">{t.noPros}</p>
+          {servicesLoading && <p className="text-[var(--taupe)]">{t.loading}</p>}
+          {!servicesLoading && services.length === 0 && (
+            <p className="empty-state">{t.noServices}</p>
           )}
-          <div className="grid gap-4 sm:grid-cols-2">
-            {pros.map((p) => (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {services.map((s) => (
               <button
-                key={p.id}
-                className="card tap flex gap-4 p-4 text-left transition hover:border-[var(--ink)]"
+                key={s.id}
+                type="button"
                 onClick={() => {
-                  setSelectedPro(p);
+                  setSelectedService(s);
+                  setDate(null);
+                  setTime(null);
+                  setSlots([]);
                   setStep(3);
                 }}
+                className="card tap flex min-h-[4.5rem] items-center justify-between gap-3 p-4 text-left transition hover:bg-[var(--paper)]"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={p.photoUrl || "/avatars/luna.svg"}
-                  alt=""
-                  className="h-20 w-20 rounded-[12px] object-cover"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="heading-section text-lg">{p.name}</p>
-                  <p className="mt-1 line-clamp-2 text-sm text-[var(--taupe)]">
-                    {p.bio}
+                <div>
+                  <p className="heading-section text-xl leading-tight">
+                    {s.name}
                   </p>
-                  <p className="mt-2 text-sm">
-                    {p.address}
-                    <span className="mx-2 text-[var(--muted)]">·</span>
-                    {money(p.service.priceCents, locale)}
-                    <span className="text-[var(--muted)]">
-                      {" "}
-                      / {p.service.durationMin}
-                      {t.minutes}
-                    </span>
+                  <p className="mt-1 text-sm text-[var(--taupe)]">
+                    {s.durationMin}
+                    {t.minutes}
                   </p>
                 </div>
+                <p className="text-xl font-medium">
+                  {money(s.priceCents, locale)}
+                </p>
               </button>
             ))}
           </div>
         </section>
       )}
 
-      {step === 3 && selectedPro && (
+      {step === 3 && selectedPro && selectedService && (
         <section className="space-y-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="heading-section text-2xl">{t.pickDay}</h2>
               <p className="text-sm text-[var(--taupe)]">
-                {selectedPro.name} · {selectedPro.service.name}
+                {selectedPro.name} · {selectedService.name}
               </p>
             </div>
             <button className="btn btn-ghost" onClick={() => setStep(2)}>
@@ -374,7 +496,9 @@ export function BookingWizard() {
               >
                 ‹
               </button>
-              <p className="heading-section text-base capitalize">{monthLabel}</p>
+              <p className="heading-section text-base capitalize">
+                {monthLabel}
+              </p>
               <button
                 className="tap rounded-full border border-[var(--line)] px-3"
                 onClick={() =>
@@ -396,7 +520,9 @@ export function BookingWizard() {
               {cells.map((day, i) => {
                 if (day == null) return <div key={i} />;
                 const ds = `${cursor.y}-${String(cursor.m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                const dow = new Date(Date.UTC(cursor.y, cursor.m, day, 12)).getUTCDay();
+                const dow = new Date(
+                  Date.UTC(cursor.y, cursor.m, day, 12)
+                ).getUTCDay();
                 const closed = dow === 0 || dow === 1;
                 const past = ds < today;
                 const disabled = closed || past;
@@ -405,7 +531,12 @@ export function BookingWizard() {
                   <button
                     key={i}
                     disabled={disabled}
-                    onClick={() => setDate(ds)}
+                    onClick={() => {
+                      setDate(ds);
+                      setTime(null);
+                      setSlots([]);
+                      setSlotsLoading(true);
+                    }}
                     className={`tap min-h-12 rounded-[12px] text-base font-medium ${
                       selected
                         ? "bg-[var(--ink)] text-[var(--ivory)]"
@@ -425,8 +556,8 @@ export function BookingWizard() {
           {date && (
             <div>
               <h3 className="mb-3 heading-section text-xl">{t.pickTime}</h3>
-              {loading && <p className="text-[var(--taupe)]">{t.loading}</p>}
-              {!loading && slots.length === 0 && (
+              {slotsLoading && <p className="text-[var(--taupe)]">{t.loading}</p>}
+              {!slotsLoading && slots.length === 0 && (
                 <p className="text-[var(--taupe)]">{t.noSlots}</p>
               )}
               <div className="flex flex-wrap gap-2">
@@ -457,7 +588,7 @@ export function BookingWizard() {
         </section>
       )}
 
-      {step === 4 && selectedPro && date && time && (
+      {step === 4 && selectedPro && selectedService && date && time && (
         <section className="mx-auto max-w-lg space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="heading-section text-2xl">{t.stepDetails}</h2>
@@ -467,10 +598,10 @@ export function BookingWizard() {
           </div>
           <div className="card space-y-1 p-3.5 text-sm text-[var(--taupe)]">
             <p>
-              {selectedPro.service.name} · {selectedPro.name}
+              {selectedService.name} · {selectedPro.name}
             </p>
             <p>
-              {date} · {time} · {money(selectedPro.service.priceCents, locale)}
+              {date} · {time} · {money(selectedService.priceCents, locale)}
             </p>
             <p>{selectedPro.address}</p>
           </div>
@@ -562,7 +693,10 @@ export function BookingWizard() {
       {step === 5 && confirm && (
         <section className="mx-auto max-w-lg space-y-5">
           <p className="chip">{t.confirmed}</p>
-          <h2 className="heading-display text-3xl tracking-tight sm:text-4xl">{confirm.refCode}</h2>
+          <h2 className="heading-display text-3xl tracking-tight sm:text-4xl">
+            {confirm.refCode}
+          </h2>
+          <p className="text-[var(--taupe)]">{t.sub}</p>
           <div className="card space-y-3 p-4 text-sm">
             <Row label={t.professional} value={confirm.professionalName} />
             <Row label={t.stepService} value={confirm.serviceName} />
@@ -570,27 +704,8 @@ export function BookingWizard() {
             <Row label={t.place} value={confirm.place} />
             <Row label={t.price} value={money(confirm.priceCents, locale)} />
           </div>
-          {(confirm.notifications?.clientSmsSent ||
-            confirm.notifications?.clientEmailSent ||
-            confirm.notifications?.clientEmail === "failed") && (
-            <div className="space-y-1 text-sm text-[var(--taupe)]">
-              {confirm.notifications?.clientSmsSent && (
-                <p>{t.notifySmsSent}</p>
-              )}
-              {confirm.notifications?.clientEmailSent && (
-                <p>{t.notifyEmailSent}</p>
-              )}
-              {!confirm.notifications?.clientEmailSent &&
-                confirm.notifications?.clientEmail === "failed" && (
-                  <p>{t.notifyEmailFailed}</p>
-                )}
-            </div>
-          )}
-          {confirm.whatsappUrl ? (
-            <div className="space-y-2">
-              <p className="text-center text-xs text-[var(--muted)]">
-                {t.notifyWhatsAppHint}
-              </p>
+          <div className="flex flex-col gap-3">
+            {confirm.whatsappUrl ? (
               <a
                 className="btn btn-primary w-full"
                 href={confirm.whatsappUrl}
@@ -599,31 +714,32 @@ export function BookingWizard() {
               >
                 {t.whatsappBtn}
               </a>
-            </div>
-          ) : (
-            <button
-              className="btn btn-primary w-full"
-              onClick={async () => {
-                await navigator.clipboard.writeText(confirm.message);
-                setCopied(true);
-                toast("Copied");
-              }}
-            >
-              {copied ? t.copied : t.copyMsg}
-            </button>
-          )}
-          {!confirm.whatsappUrl ? null : (
-            <button
-              className="btn btn-ghost w-full"
-              onClick={async () => {
-                await navigator.clipboard.writeText(confirm.message);
-                setCopied(true);
-                toast("Copied");
-              }}
-            >
-              {copied ? t.copied : t.copyMsg}
-            </button>
-          )}
+            ) : null}
+            {calendarEvent ? (
+              <>
+                <a
+                  className="btn btn-ghost w-full"
+                  href={googleCalendarUrl(calendarEvent)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t.googleCalendar}
+                </a>
+                <button
+                  type="button"
+                  className="btn btn-ghost w-full"
+                  onClick={() =>
+                    downloadIcs(
+                      calendarEvent,
+                      `${confirm.refCode.toLowerCase()}.ics`
+                    )
+                  }
+                >
+                  {t.downloadIcs}
+                </button>
+              </>
+            ) : null}
+          </div>
         </section>
       )}
     </div>
@@ -635,46 +751,6 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between gap-4 border-b border-[var(--line)] pb-2 last:border-0">
       <span className="text-[var(--muted)]">{label}</span>
       <span className="text-right">{value}</span>
-    </div>
-  );
-}
-
-function ServiceGroup({
-  title,
-  items,
-  locale,
-  minutesLabel,
-  onSelect,
-}: {
-  title: string;
-  items: CatalogService[];
-  locale: string;
-  minutesLabel: string;
-  onSelect: (s: CatalogService) => void;
-}) {
-  if (!items.length) return null;
-  return (
-    <div>
-      <h2 className="mb-3 heading-section text-xl">{title}</h2>
-      <div className="grid gap-3 sm:grid-cols-2">
-        {items.map((s) => (
-          <button
-            key={s.id}
-            disabled={!s.available}
-            onClick={() => onSelect(s)}
-            className="card tap flex min-h-[4.5rem] items-center justify-between gap-3 p-4 text-left transition hover:bg-[var(--paper)] disabled:opacity-40"
-          >
-            <div>
-              <p className="heading-section text-xl leading-tight">{s.name}</p>
-              <p className="mt-1 text-sm text-[var(--taupe)]">
-                {s.durationMin}
-                {minutesLabel}
-              </p>
-            </div>
-            <p className="text-xl font-medium">{money(s.fromPriceCents, locale)}</p>
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

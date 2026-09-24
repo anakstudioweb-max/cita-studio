@@ -1,6 +1,6 @@
 # Anak.Studio
 
-Quiet-luxury Houston marketplace for lashes & brows. Clients book without an account; professionals confirm on WhatsApp.
+Quiet-luxury Houston marketplace for lashes & brows. Clients pick a professional, then a service, and book without an account. The professional calls or texts to confirm.
 
 **Brand:** Anak.Studio · booking refs `ANA-XXXX` · English UI by default (auto EN / ES / PT / FR).
 
@@ -58,6 +58,17 @@ npm run dev
 ```
 
 Open http://localhost:3000
+
+## Professional photo & Instagram
+
+`professionals.photo_url` and `professionals.instagram` already exist (no migration). Set them in:
+
+- **`/admin` → Professionals** → expand artist → Photo URL / Instagram
+- **`/pro` → Profile** → Photo URL / Instagram (the pro themselves)
+
+Photo URL: any https image (or drop a file under `public/` and use `/your-file.jpg`). Instagram: `@handle` or full URL — saved as `https://instagram.com/...`.
+
+Professionals enter at **https://bookanakstudio.com/pro** (via `/login`). Public home does not advertise signup.
 
 ## Admin login (after reset)
 

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Logo } from "@/components/Logo";
 import { useI18n } from "@/lib/i18n/context";
 import type { Locale } from "@/lib/i18n/dictionaries";
@@ -28,12 +27,6 @@ export function SiteHeader() {
               </option>
             ))}
           </select>
-          <Link
-            href="/login"
-            className="hidden min-h-10 items-center rounded-[980px] border border-[var(--line)] px-4 text-sm font-medium text-[var(--ink)] transition hover:bg-[var(--paper)] sm:inline-flex"
-          >
-            {t.login}
-          </Link>
         </div>
       </div>
     </header>

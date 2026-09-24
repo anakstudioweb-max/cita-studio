@@ -4,6 +4,7 @@ import { getSession, hashPassword } from "@/lib/auth/session";
 import { getDb, hasDatabaseUrl, schema } from "@/lib/db";
 import { adminCreateSchema, profileSchema } from "@/lib/validation";
 import { slugify } from "@/lib/utils";
+import { normalizeInstagram } from "@/lib/instagram";
 import { z } from "zod";
 
 async function requireOwner() {
@@ -98,7 +99,7 @@ export async function PATCH(req: Request) {
     ...(body.city !== undefined ? { city: body.city } : {}),
     ...(body.address !== undefined ? { address: body.address } : {}),
     ...(body.whatsapp !== undefined ? { whatsapp: body.whatsapp } : {}),
-    ...(body.instagram !== undefined ? { instagram: body.instagram } : {}),
+    ...(body.instagram !== undefined ? { instagram: normalizeInstagram(body.instagram) } : {}),
     ...(body.photoUrl !== undefined ? { photoUrl: body.photoUrl } : {}),
     ...(body.hoursJson !== undefined ? { hoursJson: body.hoursJson } : {}),
     ...(body.closedDaysJson !== undefined

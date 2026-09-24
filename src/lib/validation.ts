@@ -67,7 +67,7 @@ export const profileSchema = z.object({
   city: z.string().max(80).optional(),
   address: z.string().max(200).optional(),
   whatsapp: z.string().max(30).optional(),
-  instagram: z.string().max(80).optional(),
+  instagram: z.string().max(200).optional(),
   photoUrl: z.string().max(500).optional(),
   hoursJson: z
     .object({ start: z.string(), end: z.string() })

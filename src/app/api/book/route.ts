@@ -206,6 +206,8 @@ export async function POST(req: Request) {
           professionalName: pro.name,
           serviceName: svc.name,
           durationMin: svc.durationMin,
+          startAt: startAt.toISOString(),
+          endAt: endAt.toISOString(),
           whatsappUrl: wa,
           message: msg,
         },
